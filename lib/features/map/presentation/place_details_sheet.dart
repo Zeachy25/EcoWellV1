@@ -20,7 +20,7 @@ class PlaceDetailsSheet extends StatelessWidget {
   final VoidCallback onDirections;
 
   /// Only set when the test flag is on (lib/core/dev_flags.dart).
-  final VoidCallback? onSimulateArrival;
+  final void Function(Duration delay)? onSimulateArrival;
 
   @override
   Widget build(BuildContext context) {
@@ -70,12 +70,24 @@ class PlaceDetailsSheet extends StatelessWidget {
             if (onSimulateArrival != null)
               Align(
                 alignment: Alignment.center,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    onSimulateArrival!();
-                  },
-                  child: const Text('Test: simulate arrival'),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onSimulateArrival!(Duration.zero);
+                      },
+                      child: const Text('Test: simulate arrival'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onSimulateArrival!(const Duration(seconds: 10));
+                      },
+                      child: const Text('Test: arrival in 10 s (minimize app)'),
+                    ),
+                  ],
                 ),
               ),
           ],

@@ -25,8 +25,15 @@ String friendlyAuthError(Object error) {
   if (m.contains('invalid login credentials')) {
     return 'Incorrect email or password. Please try again.';
   }
+  if (m.contains('token has expired') ||
+      m.contains('otp_expired') ||
+      (m.contains('token') && m.contains('invalid'))) {
+    return 'That code is not correct or has expired. '
+        'Check it, or request a new one.';
+  }
   if (m.contains('email not confirmed')) {
-    return 'Please confirm your email first. Check your inbox for the link.';
+    return 'Please confirm your email first. Enter the code we '
+        'emailed you, or sign up again to get a new one.';
   }
   if (m.contains('already registered') || m.contains('already exists')) {
     return 'An account with this email already exists. Try logging in instead.';

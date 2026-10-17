@@ -61,7 +61,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           if (mounted) context.push('/navigate', extra: s);
         },
         onSimulateArrival: kEnableTestArrivalButton
-            ? () => ref.read(geofenceServiceProvider).simulateArrival(s)
+            ? (delay) => ref
+                .read(geofenceServiceProvider)
+                .simulateArrival(s, delay: delay)
             : null,
       ),
     );

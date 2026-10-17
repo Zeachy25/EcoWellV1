@@ -6,17 +6,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/services/notification_service.dart';
 import '../../activities/data/activity_repository.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../explore/presentation/explore_screen.dart';
 import '../../geofence/data/geofence_providers.dart';
 import '../../geofence/data/geofence_service.dart';
+import '../../home/data/home_providers.dart';
 import '../../home/data/profile_providers.dart';
 import '../../home/presentation/home_screen.dart';
+import '../../map/data/map_providers.dart';
 import '../../map/domain/green_space.dart';
 import '../../map/presentation/map_screen.dart';
 import '../../visit/data/visit_providers.dart';
 import '../../visit/data/visit_repository.dart';
+
+/// Lets other screens (for example Home's "Start Now") switch the main tab:
+/// 0 Home, 1 Explore, 2 Map, 3 Dashboard.
+final ValueNotifier<int> shellTabIndex = ValueNotifier<int>(0);
 
 class _CreateAction {
   const _CreateAction(this.id, this.icon, this.title, this.subtitle);
@@ -45,6 +52,7 @@ class _MainShellState extends ConsumerState<MainShell>
   final Set<int> _visited = {0};
 
   StreamSubscription<GeofenceEvent>? _geoSub;
+  StreamSubscription<String>? _tapSub;
   bool _appResumed = true;
   bool _visitOpen = false;
   GreenSpace? _pendingArrival;
@@ -74,14 +82,18 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   void initState() {
     super.initState();
+    shellTabIndex.value = 0;
+    shellTabIndex.addListener(_onTabRequested);
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _initGeofence());
   }
 
   @override
   void dispose() {
+    shellTabIndex.removeListener(_onTabRequested);
     WidgetsBinding.instance.removeObserver(this);
     _geoSub?.cancel();
+    _tapSub?.cancel();
     ref.read(geofenceServiceProvider).stop();
     super.dispose();
   }
@@ -100,6 +112,13 @@ class _MainShellState extends ConsumerState<MainShell>
       await _showLocationRationaleOnce();
       if (!mounted) return;
 
+      // Notifications: arrival alerts when the app is minimized.
+      final notifications = NotificationService.instance;
+      await notifications.init();
+      _tapSub ??= notifications.taps.listen(_onNotificationTap);
+      await notifications.requestPermission();
+      if (!mounted) return;
+
       final service = ref.read(geofenceServiceProvider);
       _geoSub ??= service.events.listen(_onGeofenceEvent);
 
@@ -108,6 +127,7 @@ class _MainShellState extends ConsumerState<MainShell>
       service.setActivePlace(active?.placeId);
 
       final started = await service.start();
+      if (started) ref.invalidate(homePositionProvider); // refresh Home weather
       if (!started && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
@@ -154,12 +174,14 @@ class _MainShellState extends ConsumerState<MainShell>
         _openVisit(e.space);
       } else {
         _pendingArrival = e.space; // opens when the user comes back
+        NotificationService.instance.showArrival(e.space);
       }
     } else {
       if (_appResumed) {
         _askToFinish(e.space);
       } else {
         _pendingExit = e.space;
+        NotificationService.instance.showExit(e.space);
       }
     }
   }
@@ -184,10 +206,24 @@ class _MainShellState extends ConsumerState<MainShell>
   void _openVisit(GreenSpace space) {
     if (!mounted || _visitOpen) return;
     _visitOpen = true;
+    NotificationService.instance.cancelAll();
     context.push<void>('/visit', extra: space).whenComplete(() {
       _visitOpen = false;
       ref.invalidate(activeVisitProvider);
     });
+  }
+
+  /// The user tapped an EcoWell notification ("arrival:<id>" / "exit:<id>").
+  Future<void> _onNotificationTap(String payload) async {
+    final parts = payload.split(':');
+    if (parts.length != 2) return;
+    try {
+      final spaces = await ref.read(greenSpacesProvider.future);
+      final match = spaces.where((s) => s.id == parts[1]);
+      if (match.isNotEmpty) _openVisit(match.first);
+    } catch (e) {
+      debugPrint('Notification tap error: $e');
+    }
   }
 
   Future<void> _askToFinish(GreenSpace space) async {
@@ -217,10 +253,23 @@ class _MainShellState extends ConsumerState<MainShell>
 
   // ---- navigation bar ------------------------------------------------------
 
-  void _select(int i) => setState(() {
-        _index = i;
-        _visited.add(i);
-      });
+  /// Another screen asked for a different tab.
+  void _onTabRequested() {
+    final i = shellTabIndex.value;
+    if (!mounted || i == _index) return;
+    setState(() {
+      _index = i;
+      _visited.add(i);
+    });
+  }
+
+  void _select(int i) {
+    setState(() {
+      _index = i;
+      _visited.add(i);
+    });
+    shellTabIndex.value = i;
+  }
 
   void _comingSoon(String name) {
     ScaffoldMessenger.of(context).showSnackBar(

@@ -99,10 +99,20 @@ class GeofenceService {
   void onVisitClosed() => setActivePlace(null);
 
   /// For testing from home: pretends the user just entered [space].
-  void simulateArrival(GreenSpace space) {
-    _triggered.add(space.id);
-    _activePlaceId = space.id;
-    _controller.add(GeofenceEvent(GeofenceEventType.entered, space));
+  /// With a [delay] you can press the button, minimize the app, and test
+  /// the arrival notification.
+  void simulateArrival(GreenSpace space, {Duration delay = Duration.zero}) {
+    void fire() {
+      _triggered.add(space.id);
+      _activePlaceId = space.id;
+      _controller.add(GeofenceEvent(GeofenceEventType.entered, space));
+    }
+
+    if (delay == Duration.zero) {
+      fire();
+    } else {
+      Timer(delay, fire);
+    }
   }
 
   void _onPosition(Position p) {

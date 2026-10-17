@@ -72,6 +72,35 @@ class AuthRepository {
     }).eq('id', uid);
   }
 
+  /// Confirms a new account with the 6-digit code from the email.
+  Future<AuthResponse> verifySignupCode({
+    required String email,
+    required String code,
+  }) {
+    return _client.auth.verifyOTP(
+      email: email,
+      token: code,
+      type: OtpType.signup,
+    );
+  }
+
+  Future<void> resendSignupCode(String email) async {
+    await _client.auth.resend(type: OtpType.signup, email: email);
+  }
+
+  /// Checks the 6-digit password reset code. On success the user gets a
+  /// temporary session and the app moves on to "Set a new password".
+  Future<AuthResponse> verifyRecoveryCode({
+    required String email,
+    required String code,
+  }) {
+    return _client.auth.verifyOTP(
+      email: email,
+      token: code,
+      type: OtpType.recovery,
+    );
+  }
+
   Future<void> signOut() => _client.auth.signOut();
 
   static String _formatDate(DateTime d) => d.toIso8601String().substring(0, 10);

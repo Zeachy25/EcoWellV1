@@ -12,8 +12,10 @@ import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/legal_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
+import '../features/auth/presentation/reset_code_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/map/domain/green_space.dart';
 import '../features/navigation/presentation/navigation_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
@@ -48,6 +50,8 @@ const _signedOutOnlyPages = {
   '/login',
   '/register',
   '/forgot-password',
+  '/verify-email',
+  '/reset-code',
 };
 
 final GoRouter appRouter = GoRouter(
@@ -69,6 +73,12 @@ final GoRouter appRouter = GoRouter(
     if (!loggedIn && !signedOutOnly) return '/login';
     if (loggedIn && signedOutOnly) return '/home';
 
+    // The code screens need the email address passed in.
+    if ((loc == '/verify-email' || loc == '/reset-code') &&
+        state.extra is! String) {
+      return '/login';
+    }
+
     // The visit and directions screens need a place; without one, go home.
     if ((loc == '/visit' || loc == '/navigate') && state.extra is! GreenSpace) {
       return '/home';
@@ -84,6 +94,14 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/forgot-password',
       builder: (_, __) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/verify-email',
+      builder: (_, state) => VerifyEmailScreen(email: state.extra! as String),
+    ),
+    GoRoute(
+      path: '/reset-code',
+      builder: (_, state) => ResetCodeScreen(email: state.extra! as String),
     ),
     GoRoute(
       path: '/reset-password',

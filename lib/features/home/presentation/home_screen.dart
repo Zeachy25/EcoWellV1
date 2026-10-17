@@ -2,19 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/responsive.dart';
+import '../../../shared/widgets/ecowell_logo.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../map/data/map_providers.dart';
 import '../../visit/data/visit_providers.dart';
 import '../../visit/domain/visit_models.dart';
 import '../data/profile_providers.dart';
+import 'active_visit_card.dart';
+import 'hero_banner.dart';
+import 'home_search_bar.dart';
+import 'streak_banner.dart';
+import 'weather_card.dart';
 
-/// Temporary Home tab: profile, streak, and a card for a visit in progress.
+/// Home tab: profile, streak, and a card for a visit in progress.
 /// If the profile has no birthdate or no consent yet (Google sign-in, old
 /// test accounts), it sends the user to the Complete Profile screen first.
 /// Keep this check when the real Home content is built.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  // --- function: unchanged ---
   Future<void> _resume(
     BuildContext context,
     WidgetRef ref,
@@ -29,6 +38,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // --- function: unchanged ---
     ref.listen<AsyncValue<Map<String, dynamic>>>(profileProvider, (_, next) {
       next.whenData((p) {
         if (p['birthdate'] == null || p['consented_at'] == null) {
@@ -41,50 +51,558 @@ class HomeScreen extends ConsumerWidget {
     final activeAsync = ref.watch(activeVisitProvider);
     final active = activeAsync.hasValue ? activeAsync.value : null;
 
+    // --- design only ---
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('EcoWell'),
-        actions: [
-          IconButton(
-            tooltip: 'Log out',
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-          ),
-        ],
-      ),
-      body: Center(
-        child: profile.when(
-          loading: () => const CircularProgressIndicator(),
-          error: (e, _) => Padding(
+      backgroundColor: AppColors.background,
+      body: profile.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryGreen),
+        ),
+        error: (e, _) => Center(
+          child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Could not load profile:\n$e', textAlign: TextAlign.center),
+            child: Text('Could not load profile:\n$e',
+                textAlign: TextAlign.center),
           ),
-          data: (p) => Padding(
-            padding: const EdgeInsets.all(24),
+        ),
+        data: (p) {
+          final name = '${p['full_name']}';
+          final streak = p['streak_count'];
+          final streakNum = streak is num ? streak.toInt() : 0;
+
+          // Banner size, used to decide how much green sits behind it.
+          final pad = Responsive.horizontalPadding(context) + 2;
+          final bannerH =
+              (MediaQuery.sizeOf(context).width - pad * 2) * HeroBanner.aspect;
+
+          return SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.zero,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Hello, ${p['full_name']}!',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 8),
-                Text('Visit streak: ${p['streak_count']} days'),
+                // Green header with the banner overlapping its bottom edge
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Column(
+                      children: [
+                        _Header(
+                          name: name,
+                          onLogout: () =>
+                              ref.read(authRepositoryProvider).signOut(),
+                          bottomExtra: bannerH * 0.45, // green behind banner
+                        ),
+                        SizedBox(height: bannerH * 0.55), // light part
+                      ],
+                    ),
+                    Positioned(
+                      left: pad,
+                      right: pad,
+                      bottom: 0,
+                      child: const HeroBanner(),
+                    ),
+                  ],
+                ),
+                SizedBox(height: Responsive.size(context, 16)),
+
+                // Streak banner (real data)
+                Padding(
+                  padding: _pad(context),
+                  child: StreakBanner(streak: streakNum),
+                ),
+
+                // Visit in progress (real data, same _resume)
                 if (active != null) ...[
-                  const SizedBox(height: 24),
-                  Card(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    child: ListTile(
-                      leading: const Icon(Icons.park),
-                      title: Text('Visit in progress at ${active.placeName}'),
-                      subtitle: const Text('Tap to continue your check-in'),
-                      trailing: const Icon(Icons.chevron_right),
+                  SizedBox(height: Responsive.size(context, 16)),
+                  Padding(
+                    padding: _pad(context),
+                    child: ActiveVisitCard(
+                      placeName: active.placeName,
                       onTap: () => _resume(context, ref, active),
                     ),
                   ),
                 ],
+
+                SizedBox(height: Responsive.size(context, 16)),
+                Padding(padding: _pad(context), child: const WeatherCard()),
+
+                SizedBox(height: Responsive.size(context, 22)),
+                const _SectionTitle(title: 'Who to Follow'),
+                SizedBox(height: Responsive.size(context, 10)),
+                const _FollowRow(),
+
+                SizedBox(height: Responsive.size(context, 22)),
+                const _SectionTitle(title: 'Wellness Score by Location'),
+                SizedBox(height: Responsive.size(context, 6)),
+                Padding(
+                  padding: _pad(context),
+                  child: Text(
+                    'Recommended for you - explore nearby places to help you '
+                    'relax, stay active, and recharge.',
+                    style: TextStyle(
+                      fontSize: Responsive.fontSize(context, 12),
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                SizedBox(height: Responsive.size(context, 12)),
+
+                // Places from the green spaces in Supabase (filtered by search)
+                const _PlacesSection(),
+                SizedBox(height: Responsive.size(context, 32)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  static EdgeInsets _pad(BuildContext context) => EdgeInsets.symmetric(
+      horizontal: Responsive.horizontalPadding(context) + 2);
+}
+
+// ─────────────────────────── Header ───────────────────────────
+
+class _Header extends StatelessWidget {
+  final String name;
+  final VoidCallback onLogout;
+
+  /// Extra green space under the search bar, where the banner overlaps.
+  final double bottomExtra;
+
+  const _Header({
+    required this.name,
+    required this.onLogout,
+    this.bottomExtra = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1B4D36), Color(0xFF143D2B)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            Responsive.horizontalPadding(context) + 2,
+            Responsive.size(context, 10),
+            Responsive.horizontalPadding(context) + 2,
+            Responsive.size(context, 14) + bottomExtra,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top bar: logo + name (left), bell + avatar (right)
+              Row(
+                children: [
+                  EcoWellLeafIcon(
+                    size: Responsive.size(context, 26),
+                    color: AppColors.mintGreen,
+                  ),
+                  SizedBox(width: Responsive.size(context, 8)),
+                  Expanded(
+                    child: Text(
+                      'EcoWell',
+                      style: TextStyle(
+                        fontSize: Responsive.fontSize(context, 22),
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'serif',
+                        color: Colors.white,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+
+                  // Notification bell (design only, no function yet)
+                  IconButton(
+                    tooltip: 'Notifications',
+                    icon: const Icon(Icons.notifications_none,
+                        color: Colors.white),
+                    onPressed: () {},
+                  ),
+
+                  // Avatar with menu (logout lives here now)
+                  PopupMenuButton<String>(
+                    tooltip: 'Account',
+                    offset: const Offset(0, 44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'logout') onLogout();
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem<String>(
+                        enabled: false,
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 20),
+                            SizedBox(width: 10),
+                            Text('Log out'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: Container(
+                      width: Responsive.size(context, 38),
+                      height: Responsive.size(context, 38),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.mintGreen,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: Responsive.fontSize(context, 16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: Responsive.size(context, 10)),
+
+              // Greeting
+              Text(
+                'Hello, $name!',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: Responsive.fontSize(context, 15),
+                ),
+              ),
+              SizedBox(height: Responsive.size(context, 12)),
+
+              // Search bar (own file: home_search_bar.dart) + filter button
+              Row(
+                children: [
+                  const Expanded(child: HomeSearchBar()),
+                  SizedBox(width: Responsive.size(context, 10)),
+                  Container(
+                    width: Responsive.size(context, 40),
+                    height: Responsive.size(context, 40),
+                    decoration: BoxDecoration(
+                      color: AppColors.streakOrange,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    // Design only, no function yet
+                    child: const Icon(Icons.tune, color: Colors.white),
+                  ),
+                ],
+              ),
+              // The hero banner is not here. It sits in HomeScreen.
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────── Sections ─────────────────
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: HomeScreen._pad(context),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title,
+              style: TextStyle(
+                  fontSize: Responsive.fontSize(context, 16),
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary)),
+          Text('See All',
+              style: TextStyle(
+                  fontSize: Responsive.fontSize(context, 12),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textGreenTitle)),
+        ],
+      ),
+    );
+  }
+}
+
+class _FollowRow extends StatelessWidget {
+  const _FollowRow();
+
+  Widget _card(BuildContext context, String name, String handle) => Container(
+        width: Responsive.size(context, 150),
+        margin: const EdgeInsets.only(right: 12),
+        padding: EdgeInsets.all(Responsive.size(context, 12)),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: Responsive.size(context, 24),
+              backgroundColor: AppColors.mintSoft,
+              child: Text(name[0],
+                  style: const TextStyle(
+                      color: AppColors.forestDark,
+                      fontWeight: FontWeight.w800)),
+            ),
+            SizedBox(height: Responsive.size(context, 6)),
+            Text(name,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: Responsive.fontSize(context, 13))),
+            Text(handle,
+                style: TextStyle(
+                    color: AppColors.textTertiary,
+                    fontSize: Responsive.fontSize(context, 11))),
+            SizedBox(height: Responsive.size(context, 8)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.streakOrange,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('Follow',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: Responsive.fontSize(context, 11))),
+            ),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: Responsive.size(context, 150),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: HomeScreen._pad(context),
+        children: [
+          _card(context, 'Sample User', '@sample'),
+          _card(context, 'Another User', '@another'),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────── Places (real green spaces + search) ─────────────────
+
+class _PlacesSection extends ConsumerWidget {
+  const _PlacesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spacesAsync = ref.watch(greenSpacesProvider);
+
+    return spacesAsync.when(
+      loading: () => Padding(
+        padding: EdgeInsets.all(Responsive.size(context, 24)),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryGreen),
+        ),
+      ),
+      error: (e, _) => Padding(
+        padding: HomeScreen._pad(context),
+        child: const Text('Could not load places.',
+            style: TextStyle(color: AppColors.textSecondary)),
+      ),
+      data: (spaces) {
+        return ValueListenableBuilder<String>(
+          valueListenable: homeSearchQuery,
+          builder: (context, query, _) {
+            final q = query.trim().toLowerCase();
+            final searching = q.isNotEmpty;
+
+            final matches = searching
+                ? spaces
+                    .where((s) => s.name.toLowerCase().contains(q))
+                    .toList()
+                : spaces.take(5).toList(); // no search: first 5 places
+
+            if (matches.isEmpty) {
+              return Padding(
+                padding: HomeScreen._pad(context),
+                child: Text(
+                  searching
+                      ? 'No places match "$query".'
+                      : 'No green spaces yet.',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              );
+            }
+
+            final pad = HomeScreen._pad(context);
+            return Column(
+              children: [
+                for (final s in matches)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: pad.left,
+                      right: pad.right,
+                      bottom: Responsive.size(context, 14),
+                    ),
+                    child: _PlaceCard(
+                      name: s.name,
+                      // No address field in GreenSpace, so show the category.
+                      address: s.categoryLabel,
+                      // Quiet Score, only when at least one person rated it.
+                      rating: s.quietRatingCount > 0
+                          ? s.quietScoreAvg?.toStringAsFixed(1)
+                          : null,
+                      imageUrl: s.photoUrl,
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _PlaceCard extends StatelessWidget {
+  final String name;
+  final String? address;
+  final String? rating;
+  final String? imageUrl;
+  const _PlaceCard({
+    required this.name,
+    this.address,
+    this.rating,
+    this.imageUrl,
+  });
+
+  Widget _fallback() => Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF8CE0C7), Color(0xFF2E7D8B)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: const Center(
+          child: Icon(Icons.park, color: Colors.white70, size: 48),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(Responsive.size(context, 12)),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on,
+                    color: AppColors.primaryGreen, size: 18),
+                SizedBox(width: Responsive.size(context, 6)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: Responsive.fontSize(context, 14))),
+                      if (address != null)
+                        Text(address!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: Responsive.fontSize(context, 11))),
+                    ],
+                  ),
+                ),
+                if (rating != null)
+                  Column(
+                    children: [
+                      Text('Quiet Score',
+                          style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: Responsive.fontSize(context, 10))),
+                      const Icon(Icons.star,
+                          color: AppColors.amberRating, size: 18),
+                      Text(rating!,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: Responsive.fontSize(context, 11))),
+                    ],
+                  ),
               ],
             ),
           ),
-        ),
+          SizedBox(
+            height: Responsive.size(context, 170),
+            width: double.infinity,
+            child: imageUrl == null
+                ? _fallback()
+                : Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) =>
+                        progress == null ? child : _fallback(),
+                    errorBuilder: (context, error, stack) => _fallback(),
+                  ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: Responsive.size(context, 12),
+                vertical: Responsive.size(context, 8)),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Icon(Icons.favorite_border, color: Colors.red),
+                Icon(Icons.chat_bubble_outline, color: AppColors.forestDark),
+                Icon(Icons.share_outlined, color: AppColors.forestDark),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

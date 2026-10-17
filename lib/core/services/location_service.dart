@@ -20,6 +20,29 @@ class LocationService {
     }
   }
 
+  /// The position ONLY if location is already allowed. Never shows a
+  /// permission prompt, so it is safe to call as soon as the Home tab opens.
+  static Future<Position?> positionIfPermitted() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        return null;
+      }
+      return await Geolocator.getLastKnownPosition() ??
+          await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 10),
+            ),
+          );
+    } catch (e) {
+      debugPrint('Location (no prompt) error: $e');
+      return null;
+    }
+  }
+
   /// Returns the user's current position, or null when location is off,
   /// permission is denied, or it takes too long.
   static Future<Position?> currentPosition() async {

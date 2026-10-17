@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/auth_error.dart';
-import '../../../shared/widgets/google_sign_in_button.dart';
+import '../../../core/utils/responsive.dart';
+import '../../../shared/widgets/background_pattern.dart';
 import '../data/auth_repository.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -61,84 +62,333 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  // --- design only: old input look, with the new floating label ---
+  InputDecoration _inputDecoration(BuildContext context, String label,
+      {Widget? suffixIcon}) {
+    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(Responsive.radius(context, 14)),
+          borderSide: BorderSide(color: color, width: width),
+        );
+
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(
+        color: const Color(0xFF62776A),
+        fontSize: Responsive.fontSize(context, 14),
+      ),
+      floatingLabelStyle: TextStyle(
+        color: const Color(0xFF2E8B57),
+        fontSize: Responsive.fontSize(context, 14),
+        fontWeight: FontWeight.w600,
+      ),
+      fillColor: const Color(0xFFFBFDFB),
+      filled: true,
+      suffixIcon: suffixIcon,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: Responsive.size(context, 18),
+        vertical: Responsive.size(context, 16),
+      ),
+      border: border(const Color(0xFF90D5B7), 1.6),
+      enabledBorder: border(const Color(0xFF90D5B7), 1.6),
+      focusedBorder: border(const Color(0xFF2E8B57), 2.0),
+      errorBorder: border(Colors.red, 1.6),
+      focusedErrorBorder: border(Colors.red, 2.0),
+    );
+  }
+
+  // --- design only: old look ---
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final fieldTextStyle = TextStyle(
+      color: const Color(0xFF112217),
+      fontSize: Responsive.fontSize(context, 15),
+    );
+
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  Icon(Icons.spa, size: 64, color: scheme.primary),
-                  const SizedBox(height: 8),
-                  Text('Welcome back',
-                      style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: (v) => (v == null || !v.contains('@'))
-                        ? 'Enter a valid email'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _password,
-                    obscureText: _obscure,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                            _obscure ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () => setState(() => _obscure = !_obscure),
+      backgroundColor: Colors.white,
+      body: OrganicBackgroundCircles(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.horizontalPadding(context),
+                vertical: Responsive.size(context, 24),
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(height: Responsive.size(context, 12)),
+
+                    // Title
+                    Text(
+                      'Login here',
+                      style: TextStyle(
+                        fontSize: Responsive.fontSize(context, 30),
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF2E8B57),
+                        letterSpacing: -0.5,
                       ),
                     ),
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Enter your password' : null,
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => context.go('/forgot-password'),
-                      child: const Text('Forgot password?'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: _loading ? null : _submit,
-                    child: _loading
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Log in'),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: const [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('or'),
+                    SizedBox(height: Responsive.size(context, 16)),
+
+                    // Subtitle
+                    SizedBox(
+                      width: MediaQuery.sizeOf(context).width * 0.65,
+                      child: Text(
+                        'Welcome back you\'ve\nbeen missed!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: Responsive.fontSize(context, 20),
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF112217),
+                          height: 1.3,
+                        ),
                       ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  GoogleSignInButton(
-                    onPressed: _loading ? null : _signInWithGoogle,
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => context.go('/register'),
-                    child: const Text("Don't have an account? Sign up"),
-                  ),
-                ],
+                    ),
+                    SizedBox(height: Responsive.size(context, 46)),
+
+                    // Email field (floating label)
+                    TextFormField(
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      style: fieldTextStyle,
+                      decoration: _inputDecoration(context, 'Email'),
+                      validator: (v) => (v == null || !v.contains('@'))
+                          ? 'Enter a valid email'
+                          : null,
+                    ),
+                    SizedBox(height: Responsive.size(context, 18)),
+
+                    // Password field (floating label)
+                    TextFormField(
+                      controller: _password,
+                      obscureText: _obscure,
+                      style: fieldTextStyle,
+                      decoration: _inputDecoration(
+                        context,
+                        'Password',
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscure ? Icons.visibility : Icons.visibility_off,
+                            color: const Color(0xFF62776A),
+                          ),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                      ),
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? 'Enter your password'
+                          : null,
+                    ),
+
+                    // Forgot password link
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          top: Responsive.size(context, 8),
+                          bottom: Responsive.size(context, 20),
+                        ),
+                        child: GestureDetector(
+                          onTap: () => context.go('/forgot-password'),
+                          child: Text(
+                            'Forgot password?',
+                            style: TextStyle(
+                              fontSize: Responsive.fontSize(context, 12),
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF112217),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Log in button
+                    Container(
+                      width: double.infinity,
+                      height: Responsive.size(context, 54),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF75C19F), Color(0xFF1E5241)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                            Responsive.radius(context, 14)),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xFF1E5241).withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _loading ? null : _submit,
+                          borderRadius: BorderRadius.circular(
+                              Responsive.radius(context, 14)),
+                          child: Center(
+                            child: _loading
+                                ? SizedBox(
+                                    width: Responsive.size(context, 24),
+                                    height: Responsive.size(context, 24),
+                                    child: const CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2.5),
+                                  )
+                                : Text(
+                                    'Log in',
+                                    style: TextStyle(
+                                      fontSize:
+                                          Responsive.fontSize(context, 18),
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: Responsive.size(context, 38)),
+
+                    // "or" divider
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color:
+                                const Color(0xFFD6E8DF).withValues(alpha: 0.9),
+                            thickness: 1,
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: Responsive.size(context, 14)),
+                          child: Text(
+                            'or',
+                            style: TextStyle(
+                              fontSize: Responsive.fontSize(context, 13),
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF778D80),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color:
+                                const Color(0xFFD6E8DF).withValues(alpha: 0.9),
+                            thickness: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: Responsive.size(context, 18)),
+
+                    // Google button (old look, same onPressed as before)
+                    Container(
+                      width: double.infinity,
+                      height: Responsive.size(context, 54),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(
+                            Responsive.radius(context, 14)),
+                        border: Border.all(color: const Color(0xFFD6E8DF)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _loading ? null : _signInWithGoogle,
+                          borderRadius: BorderRadius.circular(
+                              Responsive.radius(context, 14)),
+                          child: Center(
+                            child: _loading
+                                ? SizedBox(
+                                    width: Responsive.size(context, 24),
+                                    height: Responsive.size(context, 24),
+                                    child: const CircularProgressIndicator(
+                                        color: Color(0xFF2E8B57),
+                                        strokeWidth: 2.5),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Image.network(
+                                        'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png',
+                                        width: Responsive.size(context, 22),
+                                        height: Responsive.size(context, 22),
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                Text(
+                                          'G',
+                                          style: TextStyle(
+                                            fontSize: Responsive.fontSize(
+                                                context, 22),
+                                            fontWeight: FontWeight.w900,
+                                            color: const Color(0xFFEA4335),
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                          width: Responsive.size(context, 10)),
+                                      Text(
+                                        'Continue with Google',
+                                        style: TextStyle(
+                                          fontSize: Responsive.fontSize(
+                                              context, 15),
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF112217),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: Responsive.size(context, 28)),
+
+                    // Bottom row: switch to register
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Don't have an account? ",
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 14),
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF112217),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => context.go('/register'),
+                          child: Text(
+                            'Sign up',
+                            style: TextStyle(
+                              fontSize: Responsive.fontSize(context, 14),
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF2E8B57),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

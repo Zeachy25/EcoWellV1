@@ -8,7 +8,7 @@ final profileProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) async {
     return await supabase
         .from('profiles')
-        .select('full_name, streak_count, birthdate, consented_at')
+        .select('full_name, avatar_url, streak_count, birthdate, consented_at')
         .single();
   },
 );
