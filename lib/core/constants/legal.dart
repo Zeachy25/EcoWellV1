@@ -35,7 +35,8 @@ const legalSections = <LegalSection>[
   LegalSection(
     '4. Who can see your data',
     'Your visits and stress check results are private to you. Posts and '
-        'comments are visible to other EcoWell users. We do not sell your '
+        'comments, and your name and profile picture, are visible to other '
+        'EcoWell users. We do not sell your '
         'data. We use service providers to run the app: Supabase (database '
         'and hosting), Google (sign-in and maps), and an AI provider for the '
         'coach. They receive only what is needed to provide their service.',

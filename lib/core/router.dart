@@ -8,6 +8,7 @@ import '../features/activities/domain/activity_models.dart';
 import '../features/activities/presentation/activity_list_screen.dart';
 import '../features/activities/presentation/activity_runner_screen.dart';
 import '../features/auth/presentation/complete_profile_screen.dart';
+import '../features/community/presentation/create_post_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/legal_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -116,6 +117,8 @@ final GoRouter appRouter = GoRouter(
     ),
     // After login the user lands in the main app frame (Home tab first).
     GoRoute(path: '/home', builder: (_, __) => const MainShell()),
+    // Share a moment (new post for the Explore feed).
+    GoRoute(path: '/post/new', builder: (_, __) => const CreatePostScreen()),
     // Guided activities: a list by type, and the step-by-step runner.
     GoRoute(
       path: '/activities/:type',

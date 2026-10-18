@@ -51,110 +51,120 @@ class HomeScreen extends ConsumerWidget {
     final activeAsync = ref.watch(activeVisitProvider);
     final active = activeAsync.hasValue ? activeAsync.value : null;
 
-    // --- design only ---
+    // The layout always shows. Data that is missing (loading or offline)
+    // only hides or replaces the parts that need it.
+    final p = profile.hasValue ? profile.value : null;
+    final name = p == null ? '' : '${p['full_name']}';
+    final streak = p?['streak_count'];
+    final streakNum = streak is num ? streak.toInt() : 0;
+    final profileFailed = profile.hasError && !profile.hasValue;
+
+    // Banner size, used to decide how much green sits behind it.
+    final pad = Responsive.horizontalPadding(context) + 2;
+    final bannerH =
+        (MediaQuery.sizeOf(context).width - pad * 2) * HeroBanner.aspect;
+
+    void retry() {
+      ref.invalidate(profileProvider);
+      ref.invalidate(greenSpacesProvider);
+      ref.invalidate(activeVisitProvider);
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: profile.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primaryGreen),
-        ),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Could not load profile:\n$e',
-                textAlign: TextAlign.center),
-          ),
-        ),
-        data: (p) {
-          final name = '${p['full_name']}';
-          final streak = p['streak_count'];
-          final streakNum = streak is num ? streak.toInt() : 0;
-
-          // Banner size, used to decide how much green sits behind it.
-          final pad = Responsive.horizontalPadding(context) + 2;
-          final bannerH =
-              (MediaQuery.sizeOf(context).width - pad * 2) * HeroBanner.aspect;
-
-          return SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.zero,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Green header with the banner overlapping its bottom edge
+            Stack(
+              clipBehavior: Clip.none,
               children: [
-                // Green header with the banner overlapping its bottom edge
-                Stack(
-                  clipBehavior: Clip.none,
+                Column(
                   children: [
-                    Column(
-                      children: [
-                        _Header(
-                          name: name,
-                          onLogout: () =>
-                              ref.read(authRepositoryProvider).signOut(),
-                          bottomExtra: bannerH * 0.45, // green behind banner
-                        ),
-                        SizedBox(height: bannerH * 0.55), // light part
-                      ],
+                    _Header(
+                      name: name,
+                      onLogout: () =>
+                          ref.read(authRepositoryProvider).signOut(),
+                      bottomExtra: bannerH * 0.45, // green behind banner
                     ),
-                    Positioned(
-                      left: pad,
-                      right: pad,
-                      bottom: 0,
-                      child: const HeroBanner(),
-                    ),
+                    SizedBox(height: bannerH * 0.55), // light part
                   ],
                 ),
-                SizedBox(height: Responsive.size(context, 16)),
-
-                // Streak banner (real data)
-                Padding(
-                  padding: _pad(context),
-                  child: StreakBanner(streak: streakNum),
+                Positioned(
+                  left: pad,
+                  right: pad,
+                  bottom: 0,
+                  child: const HeroBanner(),
                 ),
-
-                // Visit in progress (real data, same _resume)
-                if (active != null) ...[
-                  SizedBox(height: Responsive.size(context, 16)),
-                  Padding(
-                    padding: _pad(context),
-                    child: ActiveVisitCard(
-                      placeName: active.placeName,
-                      onTap: () => _resume(context, ref, active),
-                    ),
-                  ),
-                ],
-
-                SizedBox(height: Responsive.size(context, 16)),
-                Padding(padding: _pad(context), child: const WeatherCard()),
-
-                SizedBox(height: Responsive.size(context, 22)),
-                const _SectionTitle(title: 'Who to Follow'),
-                SizedBox(height: Responsive.size(context, 10)),
-                const _FollowRow(),
-
-                SizedBox(height: Responsive.size(context, 22)),
-                const _SectionTitle(title: 'Wellness Score by Location'),
-                SizedBox(height: Responsive.size(context, 6)),
-                Padding(
-                  padding: _pad(context),
-                  child: Text(
-                    'Recommended for you - explore nearby places to help you '
-                    'relax, stay active, and recharge.',
-                    style: TextStyle(
-                      fontSize: Responsive.fontSize(context, 12),
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                SizedBox(height: Responsive.size(context, 12)),
-
-                // Places from the green spaces in Supabase (filtered by search)
-                const _PlacesSection(),
-                SizedBox(height: Responsive.size(context, 32)),
               ],
             ),
-          );
-        },
+            SizedBox(height: Responsive.size(context, 16)),
+
+            // Shown when the profile could not be loaded (offline)
+            if (profileFailed) ...[
+              Padding(
+                padding: _pad(context),
+                child: _OfflineBanner(onRetry: retry),
+              ),
+              SizedBox(height: Responsive.size(context, 16)),
+            ],
+
+            // Streak: placeholder while loading, real value once known
+            if (p != null)
+              Padding(
+                padding: _pad(context),
+                child: StreakBanner(streak: streakNum),
+              )
+            else if (!profileFailed)
+              Padding(
+                padding: _pad(context),
+                child: _LoadingBar(height: Responsive.size(context, 62)),
+              ),
+
+            // Visit in progress (real data, same _resume)
+            if (active != null) ...[
+              SizedBox(height: Responsive.size(context, 16)),
+              Padding(
+                padding: _pad(context),
+                child: ActiveVisitCard(
+                  placeName: active.placeName,
+                  onTap: () => _resume(context, ref, active),
+                ),
+              ),
+            ],
+
+            SizedBox(height: Responsive.size(context, 16)),
+            Padding(padding: _pad(context), child: const WeatherCard()),
+
+            SizedBox(height: Responsive.size(context, 22)),
+            const _SectionTitle(title: 'Who to Follow'),
+            SizedBox(height: Responsive.size(context, 10)),
+            const _FollowRow(),
+
+            SizedBox(height: Responsive.size(context, 22)),
+            const _SectionTitle(title: 'Wellness Score by Location'),
+            SizedBox(height: Responsive.size(context, 6)),
+            Padding(
+              padding: _pad(context),
+              child: Text(
+                'Recommended for you - explore nearby places to help you '
+                'relax, stay active, and recharge.',
+                style: TextStyle(
+                  fontSize: Responsive.fontSize(context, 12),
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            SizedBox(height: Responsive.size(context, 12)),
+
+            // Places from the green spaces in Supabase (filtered by search)
+            const _PlacesSection(),
+            SizedBox(height: Responsive.size(context, 32)),
+          ],
+        ),
       ),
     );
   }
@@ -243,17 +253,18 @@ class _Header extends StatelessWidget {
                       if (value == 'logout') onLogout();
                     },
                     itemBuilder: (_) => [
-                      PopupMenuItem<String>(
-                        enabled: false,
-                        child: Text(
-                          name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                      if (name.isNotEmpty)
+                        PopupMenuItem<String>(
+                          enabled: false,
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
-                      ),
-                      const PopupMenuDivider(),
+                      if (name.isNotEmpty) const PopupMenuDivider(),
                       const PopupMenuItem<String>(
                         value: 'logout',
                         child: Row(
@@ -288,9 +299,9 @@ class _Header extends StatelessWidget {
               ),
               SizedBox(height: Responsive.size(context, 10)),
 
-              // Greeting
+              // Greeting (generic until the name is known)
               Text(
-                'Hello, $name!',
+                name.isEmpty ? 'Welcome!' : 'Hello, $name!',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -322,6 +333,60 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ───────────────── Offline and loading helpers ─────────────────
+
+class _OfflineBanner extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _OfflineBanner({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(Responsive.size(context, 12)),
+      decoration: BoxDecoration(
+        color: AppColors.orangeLight,
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: AppColors.streakOrange.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off, color: AppColors.streakOrange),
+          SizedBox(width: Responsive.size(context, 10)),
+          Expanded(
+            child: Text(
+              'No connection. Some content could not be loaded.',
+              style: TextStyle(
+                fontSize: Responsive.fontSize(context, 12),
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Soft placeholder block shown where data is still loading.
+class _LoadingBar extends StatelessWidget {
+  final double height;
+  const _LoadingBar({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
       ),
     );
   }
@@ -438,8 +503,18 @@ class _PlacesSection extends ConsumerWidget {
       ),
       error: (e, _) => Padding(
         padding: HomeScreen._pad(context),
-        child: const Text('Could not load places.',
-            style: TextStyle(color: AppColors.textSecondary)),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text('Could not load places.',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: () => ref.invalidate(greenSpacesProvider),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
       data: (spaces) {
         return ValueListenableBuilder<String>(

@@ -9,6 +9,9 @@ final profileProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     return await supabase
         .from('profiles')
         .select('full_name, avatar_url, streak_count, birthdate, consented_at')
-        .single();
+        .single()
+        // With no connection, fail after 8 seconds so Home shows the
+        // offline banner with Retry instead of waiting forever.
+        .timeout(const Duration(seconds: 8));
   },
 );
