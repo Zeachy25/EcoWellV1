@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +22,7 @@ import 'active_visit_card.dart';
 import 'hero_banner.dart';
 import 'home_search_bar.dart';
 import 'streak_banner.dart';
-import 'weather_card.dart';
+import '../../weather/presentation/weather_card.dart';
 
 /// Home tab: profile, streak, and a card for a visit in progress.
 /// If the profile has no birthdate or no consent yet (Google sign-in, old
@@ -435,6 +437,19 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
 
   Future<void> _loadPlaceSocial() async {
     try {
+      final cached = await _community.readCachedPlaceSocial();
+      if (mounted && cached != null) {
+        setState(() {
+          _placeSocial
+            ..clear()
+            ..addAll(cached);
+        });
+      }
+    } catch (e) {
+      debugPrint('Could not read cached place social data: $e');
+    }
+
+    try {
       final social = await _community.fetchPlaceSocial();
       if (!mounted) return;
       setState(() {
@@ -446,6 +461,16 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
     } catch (e) {
       debugPrint('Home place social error: $e');
       if (mounted) setState(() => _socialLoadFailed = true);
+    }
+  }
+
+  Future<void> _savePlaceSocialSnapshot() async {
+    try {
+      await _community.cachePlaceSocial(
+        Map<String, PlaceSocial>.of(_placeSocial),
+      );
+    } catch (e) {
+      debugPrint('Could not save place social cache: $e');
     }
   }
 
@@ -476,6 +501,7 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
 
     try {
       await _community.setPlaceLike(placeId, liked);
+      await _savePlaceSocialSnapshot();
     } catch (e) {
       debugPrint('Home place like error: $e');
       if (mounted) {
@@ -501,6 +527,7 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
             placeId,
           ).copyWith(commentCount: count);
         });
+        unawaited(_savePlaceSocialSnapshot());
       },
     );
   }
@@ -567,9 +594,11 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
                       pad.right,
                       Responsive.size(context, 10),
                     ),
-                    child: const Text(
-                      'Location likes and comments could not load. Check your connection and Supabase setup.',
-                      style: TextStyle(color: AppColors.textSecondary),
+                    child: Text(
+                      _placeSocial.isNotEmpty
+                          ? 'Showing saved like and comment counts. Connect to update them.'
+                          : 'Location likes and comments could not load. Check your connection and Supabase setup.',
+                      style: const TextStyle(color: AppColors.textSecondary),
                     ),
                   ),
                 for (final s in matches)
@@ -581,8 +610,10 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
                     ),
                     child: _PlaceCard(
                       name: s.name,
-                      // No address field in GreenSpace, so show the category.
-                      address: s.categoryLabel,
+                      category: s.categoryLabel,
+                      address: s.address,
+                      onTap: () =>
+                          context.push<void>('/location/${s.id}', extra: s),
                       // Quiet Score, only when at least one person rated it.
                       rating: s.quietRatingCount > 0
                           ? s.quietScoreAvg?.toStringAsFixed(1)
@@ -605,7 +636,9 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
 
 class _PlaceCard extends StatelessWidget {
   final String name;
+  final String category;
   final String? address;
+  final VoidCallback onTap;
   final String? rating;
   final String? imageUrl;
   final PlaceSocial social;
@@ -614,6 +647,8 @@ class _PlaceCard extends StatelessWidget {
   final VoidCallback onComments;
   const _PlaceCard({
     required this.name,
+    required this.category,
+    required this.onTap,
     required this.social,
     required this.liking,
     required this.onLike,
@@ -638,133 +673,140 @@ class _PlaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.all(Responsive.size(context, 12)),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  color: AppColors.primaryGreen,
-                  size: 18,
-                ),
-                SizedBox(width: Responsive.size(context, 6)),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: Responsive.fontSize(context, 14),
-                        ),
-                      ),
-                      if (address != null)
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.all(Responsive.size(context, 12)),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.location_on,
+                    color: AppColors.primaryGreen,
+                    size: 18,
+                  ),
+                  SizedBox(width: Responsive.size(context, 6)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          address!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          name,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: Responsive.fontSize(context, 14),
+                          ),
+                        ),
+                        if (address != null)
+                          Text(
+                            address!.trim().isEmpty
+                                ? category
+                                : '$category · ${address!.trim()}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: Responsive.fontSize(context, 11),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (rating != null)
+                    Column(
+                      children: [
+                        Text(
+                          'Quiet Score',
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: Responsive.fontSize(context, 10),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.star,
+                          color: AppColors.amberRating,
+                          size: 18,
+                        ),
+                        Text(
+                          rating!,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
                             fontSize: Responsive.fontSize(context, 11),
                           ),
                         ),
-                    ],
-                  ),
-                ),
-                if (rating != null)
-                  Column(
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: Responsive.size(context, 170),
+              width: double.infinity,
+              child: imageUrl == null
+                  ? _fallback()
+                  : CachedNetworkImage(
+                      // Cached, so the places list still has photos offline.
+                      imageUrl: imageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => _fallback(),
+                      errorWidget: (context, url, error) => _fallback(),
+                    ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.size(context, 12),
+                vertical: Responsive.size(context, 8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Quiet Score',
-                        style: TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: Responsive.fontSize(context, 10),
+                      IconButton(
+                        tooltip: social.likedByMe
+                            ? 'Unlike place'
+                            : 'Like place',
+                        onPressed: liking ? null : onLike,
+                        icon: Icon(
+                          social.likedByMe
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: Colors.red,
                         ),
                       ),
-                      const Icon(
-                        Icons.star,
-                        color: AppColors.amberRating,
-                        size: 18,
-                      ),
-                      Text(
-                        rating!,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: Responsive.fontSize(context, 11),
-                        ),
-                      ),
+                      Text('${social.likeCount}'),
                     ],
                   ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: Responsive.size(context, 170),
-            width: double.infinity,
-            child: imageUrl == null
-                ? _fallback()
-                : CachedNetworkImage(
-                    // Cached, so the places list still has photos offline.
-                    imageUrl: imageUrl!,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => _fallback(),
-                    errorWidget: (context, url, error) => _fallback(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Comments',
+                        onPressed: onComments,
+                        icon: const Icon(
+                          Icons.chat_bubble_outline,
+                          color: AppColors.forestDark,
+                        ),
+                      ),
+                      Text('${social.commentCount}'),
+                    ],
                   ),
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: Responsive.size(context, 12),
-              vertical: Responsive.size(context, 8),
+                  Icon(Icons.share_outlined, color: AppColors.forestDark),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: social.likedByMe ? 'Unlike place' : 'Like place',
-                      onPressed: liking ? null : onLike,
-                      icon: Icon(
-                        social.likedByMe
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color: Colors.red,
-                      ),
-                    ),
-                    Text('${social.likeCount}'),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'Comments',
-                      onPressed: onComments,
-                      icon: const Icon(
-                        Icons.chat_bubble_outline,
-                        color: AppColors.forestDark,
-                      ),
-                    ),
-                    Text('${social.commentCount}'),
-                  ],
-                ),
-                Icon(Icons.share_outlined, color: AppColors.forestDark),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

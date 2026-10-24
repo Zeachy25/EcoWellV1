@@ -19,12 +19,14 @@ import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/map/domain/green_space.dart';
+import '../features/map/presentation/location_detail_screen.dart';
 import '../features/navigation/presentation/navigation_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/runs/presentation/record_run_screen.dart';
 import '../features/runs/presentation/run_history_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/visit/presentation/visit_flow_screen.dart';
+import '../features/weather/presentation/weather_forecast_screen.dart';
 import 'auth_flags.dart';
 import 'config.dart';
 
@@ -84,7 +86,10 @@ final GoRouter appRouter = GoRouter(
     }
 
     // The visit and directions screens need a place; without one, go home.
-    if ((loc == '/visit' || loc == '/navigate') && state.extra is! GreenSpace) {
+    if ((loc == '/visit' ||
+            loc == '/navigate' ||
+            loc.startsWith('/location/')) &&
+        state.extra is! GreenSpace) {
       return '/home';
     }
     if (loc == '/activity' && state.extra is! Activity) return '/home';
@@ -120,6 +125,12 @@ final GoRouter appRouter = GoRouter(
     ),
     // After login the user lands in the main app frame (Home tab first).
     GoRoute(path: '/home', builder: (_, _) => const MainShell()),
+    GoRoute(path: '/weather', builder: (_, _) => const WeatherForecastScreen()),
+    GoRoute(
+      path: '/location/:id',
+      builder: (_, state) =>
+          LocationDetailScreen(space: state.extra! as GreenSpace),
+    ),
     // Share a moment (new post for the Explore feed).
     GoRoute(path: '/post/new', builder: (_, _) => const CreatePostScreen()),
     // Facebook-style profile of any user (path param = user id).
@@ -145,7 +156,10 @@ final GoRouter appRouter = GoRouter(
     // In-app walking directions to a green space.
     GoRoute(
       path: '/navigate',
-      builder: (_, state) => NavigationScreen(space: state.extra! as GreenSpace),
+      builder: (_, state) => NavigationScreen(
+        space: state.extra! as GreenSpace,
+        manualCheckIn: state.uri.queryParameters['manualCheckIn'] == 'true',
+      ),
     ),
     // A whole visit: before questions -> at the place -> after -> result.
     GoRoute(

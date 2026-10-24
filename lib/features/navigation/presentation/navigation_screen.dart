@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/location_service.dart';
 import '../../../core/utils/format.dart';
+import '../../geofence/data/geofence_providers.dart';
 import '../../map/domain/geo_utils.dart';
 import '../../map/domain/green_space.dart';
 import '../data/ors_routing_service.dart';
@@ -16,16 +18,21 @@ import '../domain/route_progress.dart';
 
 /// In-app walking directions: route line, live position, next instruction,
 /// automatic re-routing, and an arrival prompt that offers "Start visit".
-class NavigationScreen extends StatefulWidget {
-  const NavigationScreen({super.key, required this.space});
+class NavigationScreen extends ConsumerStatefulWidget {
+  const NavigationScreen({
+    super.key,
+    required this.space,
+    this.manualCheckIn = false,
+  });
 
   final GreenSpace space;
+  final bool manualCheckIn;
 
   @override
-  State<NavigationScreen> createState() => _NavigationScreenState();
+  ConsumerState<NavigationScreen> createState() => _NavigationScreenState();
 }
 
-class _NavigationScreenState extends State<NavigationScreen> {
+class _NavigationScreenState extends ConsumerState<NavigationScreen> {
   final _service = OrsRoutingService();
 
   GoogleMapController? _map;
@@ -43,20 +50,39 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _animating = false;
   double _bearing = 0;
   DateTime? _lastReroute;
+  bool _visitStartedFromArrival = false;
 
   LatLng get _dest => LatLng(widget.space.lat, widget.space.lng);
 
   @override
   void initState() {
     super.initState();
+    if (widget.manualCheckIn) {
+      ref
+          .read(geofenceServiceProvider)
+          .setManualNavigationTarget(widget.space.id);
+    }
     _begin();
   }
 
   @override
   void dispose() {
+    if (widget.manualCheckIn) {
+      ref
+          .read(geofenceServiceProvider)
+          .clearManualNavigationTarget(
+            widget.space.id,
+            visitStarted: _visitStartedFromArrival,
+          );
+    }
     _sub?.cancel();
     _map?.dispose();
     super.dispose();
+  }
+
+  void _startVisit() {
+    _visitStartedFromArrival = true;
+    context.push<void>('/visit', extra: widget.space);
   }
 
   // ---- loading the first route ----------------------------------------
@@ -273,13 +299,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Your check-in starts automatically when EcoWell detects you.',
+              'You are inside the location. Start your check-in when you are ready.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             FilledButton(
+              onPressed: _startVisit,
+              child: const Text('Start check-in'),
+            ),
+            TextButton(
               onPressed: () => context.pop(),
-              child: const Text('Close'),
+              child: const Text('Not now'),
             ),
           ],
         ),
@@ -407,6 +437,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 remainingDistance: formatDistance(progress.remainingMeters),
                 remainingTime: formatDuration(remainingTime),
                 onEnd: () => context.pop(),
+                onStartVisit: _startVisit,
               ),
             ],
           ),
@@ -511,6 +542,7 @@ class _BottomPanel extends StatelessWidget {
     required this.remainingDistance,
     required this.remainingTime,
     required this.onEnd,
+    required this.onStartVisit,
   });
 
   final bool arrived;
@@ -518,6 +550,7 @@ class _BottomPanel extends StatelessWidget {
   final String remainingDistance;
   final String remainingTime;
   final VoidCallback onEnd;
+  final VoidCallback onStartVisit;
 
   @override
   Widget build(BuildContext context) {
@@ -549,9 +582,13 @@ class _BottomPanel extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text('Your check-in will start automatically.'),
+                const Text('Start your check-in when you are ready.'),
                 const SizedBox(height: 8),
-                FilledButton(onPressed: onEnd, child: const Text('Close')),
+                FilledButton(
+                  onPressed: onStartVisit,
+                  child: const Text('Start check-in'),
+                ),
+                TextButton(onPressed: onEnd, child: const Text('Not now')),
               ] else
                 Row(
                   children: [

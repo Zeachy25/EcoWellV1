@@ -111,12 +111,18 @@ class AnnouncementRepository {
 
   static const _githubLatestRelease =
       'https://api.github.com/repos/Zeachy25/EcoWellV1/releases/latest';
-  static const _readItemsKey = 'read_announcement_ids';
+  static const _legacyReadItemsKey = 'read_announcement_ids';
+  static const _readItemsKeyPrefix = 'read_announcement_ids_';
   static const _promptedReleaseKey = 'prompted_release_tag';
 
   final SupabaseClient _supabase;
   final http.Client _http;
   final bool _ownsHttpClient;
+
+  String? get currentUserId => _supabase.auth.currentUser?.id;
+
+  Stream<String?> watchCurrentUserId() =>
+      _supabase.auth.onAuthStateChange.map((state) => state.session?.user.id);
 
   Future<List<AnnouncementItem>> fetchAnnouncements() async {
     final rows = await _supabase
@@ -175,16 +181,19 @@ class AnnouncementRepository {
   }
 
   Future<Set<String>> readAnnouncementIds() async {
+    final key = _readItemsKey;
     final preferences = await SharedPreferences.getInstance();
-    return (preferences.getStringList(_readItemsKey) ?? const <String>[])
-        .toSet();
+    await preferences.remove(_legacyReadItemsKey);
+    return (preferences.getStringList(key) ?? const <String>[]).toSet();
   }
 
   Future<void> markAnnouncementsRead(Iterable<String> ids) async {
+    final key = _readItemsKey;
     final preferences = await SharedPreferences.getInstance();
-    final read = await readAnnouncementIds();
+    await preferences.remove(_legacyReadItemsKey);
+    final read = (preferences.getStringList(key) ?? const <String>[]).toSet();
     read.addAll(ids);
-    await preferences.setStringList(_readItemsKey, read.toList());
+    await preferences.setStringList(key, read.toList());
   }
 
   Future<bool> shouldPromptForRelease(String? tag) async {
@@ -198,4 +207,6 @@ class AnnouncementRepository {
   void dispose() {
     if (_ownsHttpClient) _http.close();
   }
+
+  String get _readItemsKey => '$_readItemsKeyPrefix${currentUserId ?? 'guest'}';
 }

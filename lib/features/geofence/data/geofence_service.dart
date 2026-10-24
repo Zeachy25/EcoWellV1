@@ -44,6 +44,7 @@ class GeofenceService {
   DateTime? _outsideSince;
   bool _exitEmitted = false;
   String? _activePlaceId;
+  String? _manualNavigationPlaceId;
 
   bool get isRunning => _sub != null;
 
@@ -90,8 +91,33 @@ class GeofenceService {
   /// Tell the service which place has an open visit (null = none).
   void setActivePlace(String? placeId) {
     _activePlaceId = placeId;
+    if (placeId != null) _triggered.add(placeId);
     _outsideSince = null;
     _exitEmitted = false;
+  }
+
+  /// Keeps arrival on the navigation screen when the user explicitly chose
+  /// directions from a location's detail page.
+  void setManualNavigationTarget(String placeId) {
+    _manualNavigationPlaceId = placeId;
+  }
+
+  bool isManualNavigationTarget(String placeId) =>
+      _manualNavigationPlaceId == placeId;
+
+  /// Clears the manual route state. If the user did not start a visit, allow
+  /// the geofence to detect a later re-entry.
+  void clearManualNavigationTarget(
+    String placeId, {
+    bool visitStarted = false,
+  }) {
+    if (_manualNavigationPlaceId != placeId) return;
+    _manualNavigationPlaceId = null;
+    if (!visitStarted && _activePlaceId == placeId) {
+      _activePlaceId = null;
+      _outsideSince = null;
+      _exitEmitted = false;
+    }
   }
 
   /// Call when a visit is finished or cancelled.

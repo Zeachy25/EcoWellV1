@@ -9,6 +9,22 @@ import '../domain/weather_models.dart';
 /// the app) and a place name from BigDataCloud's free client-side
 /// reverse-geocoding service.
 class WeatherService {
+  Future<WeatherForecast> fetchForecast({
+    required double lat,
+    required double lng,
+    String? label,
+  }) async {
+    final results = await Future.wait<dynamic>([
+      _forecast(lat, lng),
+      label != null ? Future<String?>.value(label) : _placeName(lat, lng),
+    ]);
+    final response = Map<String, dynamic>.from(results[0] as Map);
+    return WeatherForecast.fromJson({
+      ...response,
+      'place_label': results[1] ?? 'Near you',
+    });
+  }
+
   Future<WeatherData> fetch({
     required double lat,
     required double lng,
@@ -41,7 +57,8 @@ class WeatherService {
     final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
       'latitude': '$lat',
       'longitude': '$lng',
-      'current': 'temperature_2m,relative_humidity_2m,apparent_temperature,'
+      'current':
+          'temperature_2m,relative_humidity_2m,apparent_temperature,'
           'precipitation,weather_code,wind_speed_10m,uv_index,is_day',
       'timezone': 'auto',
     });
@@ -53,17 +70,41 @@ class WeatherService {
     return Map<String, dynamic>.from(json['current'] as Map);
   }
 
+  Future<Map<String, dynamic>> _forecast(double lat, double lng) async {
+    final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
+      'latitude': '$lat',
+      'longitude': '$lng',
+      'current':
+          'temperature_2m,relative_humidity_2m,apparent_temperature,'
+          'precipitation,weather_code,wind_speed_10m,uv_index,is_day',
+      'hourly':
+          'temperature_2m,weather_code,precipitation_probability,uv_index',
+      'daily':
+          'weather_code,temperature_2m_max,temperature_2m_min,'
+          'precipitation_probability_max,uv_index_max',
+      'forecast_days': '7',
+      'timezone': 'auto',
+      'temperature_unit': 'celsius',
+      'wind_speed_unit': 'kmh',
+    });
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Weather forecast request failed (${response.statusCode})',
+      );
+    }
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    return json;
+  }
+
   /// "City, Region" for the coordinates, or null if it cannot be found.
   Future<String?> _placeName(double lat, double lng) async {
     try {
       final uri = Uri.https(
         'api.bigdatacloud.net',
         '/data/reverse-geocode-client',
-        {
-          'latitude': '$lat',
-          'longitude': '$lng',
-          'localityLanguage': 'en',
-        },
+        {'latitude': '$lat', 'longitude': '$lng', 'localityLanguage': 'en'},
       );
       final res = await http.get(uri).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;

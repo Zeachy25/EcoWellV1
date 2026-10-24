@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/format.dart';
-import '../../home/data/home_providers.dart';
+import '../../weather/data/weather_providers.dart';
 import '../../map/data/map_providers.dart';
 import '../../map/domain/green_space.dart';
 import '../data/community_repository.dart';
@@ -60,11 +60,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     try {
       final spaces = await ref.read(greenSpacesProvider.future);
       if (spaces.isEmpty || !mounted) return;
-      final Position? pos = await ref.read(homePositionProvider.future);
+      final Position? pos = await ref.read(weatherPositionProvider.future);
       var best = spaces.first;
       if (pos != null) {
         double d(GreenSpace s) => Geolocator.distanceBetween(
-            pos.latitude, pos.longitude, s.lat, s.lng);
+          pos.latitude,
+          pos.longitude,
+          s.lat,
+          s.lng,
+        );
         best = spaces.reduce((a, b) => d(a) <= d(b) ? a : b);
       }
       await _selectPlace(best);
@@ -80,7 +84,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _includeVisit = false;
     });
     try {
-      final v = await ref.read(communityRepositoryProvider).latestVisitAt(place.id);
+      final v = await ref
+          .read(communityRepositoryProvider)
+          .latestVisitAt(place.id);
       if (!mounted || _place?.id != place.id) return;
       setState(() {
         _visit = v;
@@ -100,8 +106,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
-          constraints:
-              BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.7),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * 0.7,
+          ),
           child: ListView(
             shrinkWrap: true,
             children: [
@@ -222,7 +229,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : Text(widget.myDay ? 'Share' : 'Post'),
             ),
           ),
@@ -231,8 +241,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(widget.myDay ? 'Photo' : 'Photos (${_photos.length}/$_maxPhotos)',
-              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            widget.myDay ? 'Photo' : 'Photos (${_photos.length}/$_maxPhotos)',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           SizedBox(
             height: 104,
@@ -263,8 +275,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             child: const CircleAvatar(
                               radius: 11,
                               backgroundColor: Colors.black54,
-                              child: Icon(Icons.close,
-                                  size: 14, color: Colors.white),
+                              child: Icon(
+                                Icons.close,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -273,21 +288,25 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   ),
                 if (canAddMore) ...[
                   _AddTile(
-                      icon: Icons.photo_library_outlined,
-                      label: 'Gallery',
-                      onTap: _posting ? null : _pickFromGallery),
+                    icon: Icons.photo_library_outlined,
+                    label: 'Gallery',
+                    onTap: _posting ? null : _pickFromGallery,
+                  ),
                   const SizedBox(width: 8),
                   _AddTile(
-                      icon: Icons.photo_camera_outlined,
-                      label: 'Camera',
-                      onTap: _posting ? null : _takePhoto),
+                    icon: Icons.photo_camera_outlined,
+                    label: 'Camera',
+                    onTap: _posting ? null : _takePhoto,
+                  ),
                 ],
               ],
             ),
           ),
           const SizedBox(height: 20),
-          Text('Place',
-              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Place',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           InkWell(
             onTap: _posting ? null : _pickPlace,
@@ -315,8 +334,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('Caption',
-              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Caption',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _caption,
@@ -333,12 +354,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _includeVisit,
-              onChanged:
-                  _posting ? null : (v) => setState(() => _includeVisit = v),
+              onChanged: _posting
+                  ? null
+                  : (v) => setState(() => _includeVisit = v),
               title: const Text('Include my visit'),
               subtitle: Text(
                 '${formatDuration(_visit!.minutes * 60.0)} \u00b7 '
-                '${_visit!.reduction > 0 ? 'stress score down ${_visit!.reduction}' : _visit!.reduction < 0 ? 'stress score up ${-_visit!.reduction}' : 'stress score unchanged'}',
+                '${_visit!.reduction > 0
+                    ? 'stress score down ${_visit!.reduction}'
+                    : _visit!.reduction < 0
+                    ? 'stress score up ${-_visit!.reduction}'
+                    : 'stress score unchanged'}',
               ),
             ),
           ],
@@ -346,13 +372,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           Text(
             widget.myDay
                 ? 'Your My Day is visible to the people who follow you for 24 '
-                    'hours, then it disappears. It does not appear in the '
-                    'Explore feed. Please do not share photos of people '
-                    'without their permission.'
+                      'hours, then it disappears. It does not appear in the '
+                      'Explore feed. Please do not share photos of people '
+                      'without their permission.'
                 : 'Your name, profile picture, photos, and caption will be '
-                    'visible to other EcoWell users. Please do not post photos '
-                    'of people without their permission.',
-            style: textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                      'visible to other EcoWell users. Please do not post photos '
+                      'of people without their permission.',
+            style: textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -361,7 +389,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 }
 
 class _AddTile extends StatelessWidget {
-  const _AddTile({required this.icon, required this.label, required this.onTap});
+  const _AddTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;

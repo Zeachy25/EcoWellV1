@@ -170,6 +170,13 @@ class PlaceSocial {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+    'place_id': placeId,
+    'like_count': likeCount,
+    'comment_count': commentCount,
+    'liked_by_me': likedByMe,
+  };
+
   factory PlaceSocial.fromJson(Map<String, dynamic> j) {
     return PlaceSocial(
       placeId: j['place_id'] as String,

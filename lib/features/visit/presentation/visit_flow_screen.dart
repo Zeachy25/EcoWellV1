@@ -66,6 +66,9 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       final v = await _repo.startOrResume(widget.space);
       if (!mounted) return;
       ref.read(geofenceServiceProvider).setActivePlace(widget.space.id);
+      ref
+          .read(geofenceServiceProvider)
+          .clearManualNavigationTarget(widget.space.id, visitStarted: true);
       setState(() {
         _visit = v;
         _step = v.hasPre ? _Step.active : _Step.pre;

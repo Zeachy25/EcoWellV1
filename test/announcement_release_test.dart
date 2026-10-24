@@ -43,20 +43,27 @@ void main() {
     expect(release.downloadUrl, endsWith('/app-release.apk'));
   });
 
-  test('persists only the announcement IDs explicitly marked read', () async {
-    SharedPreferences.setMockInitialValues({
-      'read_announcement_ids': ['announcement:old'],
-    });
-    final repository = AnnouncementRepository(
-      supabase: SupabaseClient('https://example.supabase.co', 'test-key'),
-      httpClient: http.Client(),
-    );
+  test(
+    'clears shared read IDs and stores reads in the local account scope',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'read_announcement_ids': ['announcement:old'],
+      });
+      final repository = AnnouncementRepository(
+        supabase: SupabaseClient('https://example.supabase.co', 'test-key'),
+        httpClient: http.Client(),
+      );
 
-    await repository.markAnnouncementsRead(['announcement:new']);
-    final readIds = await repository.readAnnouncementIds();
-    repository.dispose();
+      await repository.markAnnouncementsRead(['announcement:new']);
+      final readIds = await repository.readAnnouncementIds();
+      final preferences = await SharedPreferences.getInstance();
+      repository.dispose();
 
-    expect(readIds, containsAll(['announcement:old', 'announcement:new']));
-    expect(readIds, hasLength(2));
-  });
+      expect(readIds, {'announcement:new'});
+      expect(preferences.getStringList('read_announcement_ids'), isNull);
+      expect(preferences.getStringList('read_announcement_ids_guest'), [
+        'announcement:new',
+      ]);
+    },
+  );
 }

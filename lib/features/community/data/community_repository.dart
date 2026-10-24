@@ -178,16 +178,66 @@ class CommunityRepository {
   // ---- place likes and comments ---------------------------------------------
 
   /// Like / comment counts per place (keyed by place id). One RPC call for
-  /// the whole Home list. Non-fatal for callers if the place_social tables
-  /// have not been created yet.
+  /// the whole Home list. The latest successful response is cached per user
+  /// so Home can show its last-known counts offline.
   Future<Map<String, PlaceSocial>> fetchPlaceSocial() async {
-    final res = await _client
-        .rpc('get_place_social')
-        .timeout(const Duration(seconds: 8));
+    try {
+      final res = await _client
+          .rpc('get_place_social')
+          .timeout(const Duration(seconds: 8));
+      final map = _parsePlaceSocial(res);
+      try {
+        await cachePlaceSocial(map);
+      } catch (e) {
+        debugPrint('Could not cache place social data: $e');
+      }
+      return map;
+    } catch (e) {
+      debugPrint('Place social fetch failed, trying cache: $e');
+      final cached = await readCachedPlaceSocial();
+      if (cached != null) return cached;
+      rethrow;
+    }
+  }
+
+  Future<Map<String, PlaceSocial>?> readCachedPlaceSocial() async {
+    final cachedCounts = await _cache.read(CacheKeys.placeSocialCounts);
+    final cachedUser = await _cache.read(CacheKeys.placeSocial(currentUserId));
+    final counts = cachedCounts is List
+        ? _parsePlaceSocial(cachedCounts)
+        : <String, PlaceSocial>{};
+    final user = cachedUser is List
+        ? _parsePlaceSocial(cachedUser)
+        : <String, PlaceSocial>{};
+
+    if (counts.isEmpty && user.isEmpty) return null;
+
+    return {
+      for (final id in {...counts.keys, ...user.keys})
+        id: PlaceSocial(
+          placeId: id,
+          likeCount: counts[id]?.likeCount ?? user[id]?.likeCount ?? 0,
+          commentCount: counts[id]?.commentCount ?? user[id]?.commentCount ?? 0,
+          likedByMe: user[id]?.likedByMe ?? false,
+        ),
+    };
+  }
+
+  Future<void> cachePlaceSocial(Map<String, PlaceSocial> social) async {
+    await _cache.write(CacheKeys.placeSocial(currentUserId), [
+      for (final item in social.values) item.toJson(),
+    ]);
+    await _cache.write(CacheKeys.placeSocialCounts, [
+      for (final item in social.values)
+        item.copyWith(likedByMe: false).toJson(),
+    ]);
+  }
+
+  Map<String, PlaceSocial> _parsePlaceSocial(Object? rows) {
     final map = <String, PlaceSocial>{};
-    for (final r in (res as List<dynamic>)) {
-      final s = PlaceSocial.fromJson(Map<String, dynamic>.from(r as Map));
-      map[s.placeId] = s;
+    for (final row in rows as List<dynamic>) {
+      final item = PlaceSocial.fromJson(Map<String, dynamic>.from(row as Map));
+      map[item.placeId] = item;
     }
     return map;
   }

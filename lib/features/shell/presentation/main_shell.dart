@@ -14,7 +14,7 @@ import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../explore/presentation/explore_screen.dart';
 import '../../geofence/data/geofence_providers.dart';
 import '../../geofence/data/geofence_service.dart';
-import '../../home/data/home_providers.dart';
+import '../../weather/data/weather_providers.dart';
 import '../../home/data/profile_providers.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../map/data/map_providers.dart';
@@ -160,7 +160,7 @@ class _MainShellState extends ConsumerState<MainShell>
       service.setActivePlace(active?.placeId);
 
       final started = await service.start();
-      if (started) ref.invalidate(homePositionProvider); // refresh Home weather
+      if (started) ref.invalidate(weatherPositionProvider); // refresh weather
       if (!started && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
@@ -202,6 +202,11 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   void _onGeofenceEvent(GeofenceEvent e) {
+    if (ref
+        .read(geofenceServiceProvider)
+        .isManualNavigationTarget(e.space.id)) {
+      return;
+    }
     if (e.type == GeofenceEventType.entered) {
       if (_appResumed) {
         _openVisit(e.space);
