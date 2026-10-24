@@ -1,7 +1,12 @@
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ecowell/features/announcements/data/announcement_repository.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('AnnouncementItem version comparison', () {
     test('detects a newer GitHub release tag', () {
       expect(AnnouncementItem.isNewerVersion('v1.0.1', '1.0.0'), isTrue);
@@ -36,5 +41,22 @@ void main() {
     expect(release.isUpdate, isTrue);
     expect(release.message, 'New features');
     expect(release.downloadUrl, endsWith('/app-release.apk'));
+  });
+
+  test('persists only the announcement IDs explicitly marked read', () async {
+    SharedPreferences.setMockInitialValues({
+      'read_announcement_ids': ['announcement:old'],
+    });
+    final repository = AnnouncementRepository(
+      supabase: SupabaseClient('https://example.supabase.co', 'test-key'),
+      httpClient: http.Client(),
+    );
+
+    await repository.markAnnouncementsRead(['announcement:new']);
+    final readIds = await repository.readAnnouncementIds();
+    repository.dispose();
+
+    expect(readIds, containsAll(['announcement:old', 'announcement:new']));
+    expect(readIds, hasLength(2));
   });
 }

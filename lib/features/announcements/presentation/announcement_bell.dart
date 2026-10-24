@@ -190,13 +190,6 @@ class _AnnouncementBellState extends State<AnnouncementBell> {
 
   Future<void> _openAnnouncements() async {
     await _initialLoad;
-    final ids = _items.map((item) => item.id).toList();
-    setState(() => _readIds.addAll(ids));
-    try {
-      await _repository.markAnnouncementsRead(ids);
-    } catch (e) {
-      debugPrint('Could not save read announcements: $e');
-    }
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -215,10 +208,33 @@ class _AnnouncementBellState extends State<AnnouncementBell> {
             await refresh;
             if (context.mounted) setSheetState(() {});
           },
-          onOpen: _openItem,
+          readIds: _readIds,
+          onOpen: (item) {
+            unawaited(_markRead(item, setSheetState));
+            _openItem(item);
+          },
         ),
       ),
     );
+  }
+
+  Future<void> _markRead(
+    AnnouncementItem item,
+    StateSetter setSheetState,
+  ) async {
+    if (!_readIds.add(item.id)) return;
+    setState(() {});
+    setSheetState(() {});
+    try {
+      await _repository.markAnnouncementsRead([item.id]);
+    } catch (e) {
+      debugPrint('Could not save announcement read state: $e');
+      if (!mounted) return;
+      _readIds.remove(item.id);
+      setState(() {});
+      setSheetState(() {});
+      _showError('Could not save that this announcement was read.');
+    }
   }
 
   Future<void> _openItem(AnnouncementItem item) async {
@@ -281,6 +297,7 @@ class _AnnouncementList extends StatelessWidget {
     required this.announcementError,
     required this.releaseError,
     required this.onRefresh,
+    required this.readIds,
     required this.onOpen,
   });
 
@@ -289,6 +306,7 @@ class _AnnouncementList extends StatelessWidget {
   final String? announcementError;
   final String? releaseError;
   final Future<void> Function() onRefresh;
+  final Set<String> readIds;
   final ValueChanged<AnnouncementItem> onOpen;
 
   @override
@@ -335,14 +353,42 @@ class _AnnouncementList extends StatelessWidget {
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final item = items[index];
+                  final unread = !readIds.contains(item.id);
                   return ListTile(
+                    tileColor: unread
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.08)
+                        : null,
                     leading: Icon(
                       item.isUpdate
                           ? Icons.system_update_alt
                           : Icons.campaign_outlined,
                       color: AppColors.primaryGreen,
                     ),
-                    title: Text(item.title),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: TextStyle(
+                              fontWeight:
+                                  unread ? FontWeight.w700 : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        if (unread)
+                          Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
                     subtitle: Text(
                       '${item.source} · ${_formatDate(item.publishedAt)}',
                     ),
