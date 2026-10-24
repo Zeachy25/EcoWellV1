@@ -1,8 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/format.dart';
+import '../../runs/data/run_repository.dart';
+import '../../runs/presentation/run_list_tile.dart';
 import '../data/dashboard_repository.dart';
 import '../domain/dashboard_models.dart';
 import 'reduction_chart.dart';
@@ -54,38 +56,9 @@ class DashboardScreen extends ConsumerWidget {
         },
         data: (d) => RefreshIndicator(
           onRefresh: () => _refresh(ref),
-          child: d.totalVisits == 0 ? const _EmptyState() : _Content(data: d),
+          child: _Content(data: d),
         ),
       ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // A ListView so pull-to-refresh still works.
-    return ListView(
-      padding: const EdgeInsets.all(32),
-      children: [
-        const SizedBox(height: 64),
-        Icon(Icons.insights, size: 72, color: scheme.primary),
-        const SizedBox(height: 16),
-        Text(
-          'Your dashboard is waiting',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Complete your first visit to a green space and your streak, '
-          'stress reduction scores, and history will appear here.',
-          textAlign: TextAlign.center,
-        ),
-      ],
     );
   }
 }
@@ -107,9 +80,15 @@ class _Content extends StatelessWidget {
     return '${a > 0 ? '+' : ''}${a.toStringAsFixed(1)}';
   }
 
+  /// formatDuration() rounds up to "< 1 min", so show a plain zero instead.
+  String get _outdoorsText => data.totalMinutes <= 0
+      ? '0 min'
+      : formatDuration(data.totalMinutes * 60.0);
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
 
     // Chart: last 10 visits, oldest on the left.
     final chartVisits = data.recent.take(10).toList().reversed.toList();
@@ -118,6 +97,11 @@ class _Content extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // A brand-new user sees the whole layout, plus a short explanation.
+        if (data.totalVisits == 0) ...[
+          const _GettingStartedCard(),
+          const SizedBox(height: 12),
+        ],
         _StatRow(
           left: _StatCard(
             icon: Icons.local_fire_department,
@@ -153,7 +137,7 @@ class _Content extends StatelessWidget {
           ),
           right: _StatCard(
             icon: Icons.schedule,
-            value: formatDuration(data.totalMinutes * 60.0),
+            value: _outdoorsText,
             label: 'Time outdoors',
           ),
         ),
@@ -182,23 +166,48 @@ class _Content extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(
-                  'Last ${chartValues.length} '
-                  '${chartValues.length == 1 ? 'visit' : 'visits'}. '
-                  'Bars above the line mean your stress went down.',
+                  chartValues.isEmpty
+                      ? 'Finish your first visit and your scores will show up here.'
+                      : 'Last ${chartValues.length} '
+                          '${chartValues.length == 1 ? 'visit' : 'visits'}. '
+                          'Bars above the line mean your stress went down.',
                   style: textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
-                ReductionChart(values: chartValues),
+                if (chartValues.isEmpty)
+                  SizedBox(
+                    height: 120,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bar_chart, size: 40, color: scheme.outline),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No visits recorded yet',
+                            style: textTheme.bodyMedium
+                                ?.copyWith(color: scheme.outline),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  ReductionChart(values: chartValues),
               ],
             ),
           ),
         ),
         const SizedBox(height: 20),
+        const _RunsSection(),
+        const SizedBox(height: 20),
         Text('Recent visits',
             style:
                 textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        for (final v in data.recent.take(10)) _VisitTile(visit: v),
+        if (data.recent.isEmpty) const _NoVisitsCard(),
+        if (data.recent.isNotEmpty)
+          for (final v in data.recent.take(10)) _VisitTile(visit: v),
         const SizedBox(height: 16),
         Text(
           'EcoWell is a wellness tool, not a medical assessment.',
@@ -207,6 +216,156 @@ class _Content extends StatelessWidget {
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+/// Recent Quick Runs, read from the phone so the section works offline.
+class _RunsSection extends ConsumerWidget {
+  const _RunsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final textTheme = Theme.of(context).textTheme;
+    final async = ref.watch(runHistoryProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Quick Runs',
+                style: textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            TextButton(
+              onPressed: () => context.push('/runs'),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        async.when(
+          loading: () => const SizedBox.shrink(),
+          error: (e, _) {
+            debugPrint('Dashboard runs error: $e');
+            return const SizedBox.shrink();
+          },
+          data: (runs) {
+            if (runs.isEmpty) return const _NoRunsCard();
+            return Column(
+              children: [
+                for (final run in runs.take(3)) RunListTile(record: run),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _NoRunsCard extends StatelessWidget {
+  const _NoRunsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(Icons.directions_run, color: scheme.outline),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Record a walk or run with Quick Run (the + button) '
+                'and it will show up here.',
+                style: textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown to a user who has not finished a visit yet: the dashboard is not
+/// empty, it just has nothing to count.
+class _GettingStartedCard extends StatelessWidget {
+  const _GettingStartedCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      color: scheme.primaryContainer,
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.insights, color: scheme.onPrimaryContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Getting started',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Visit a green space and complete the short check-in. '
+                    'Your streak, scores and history will fill in on this page.',
+                    style: textTheme.bodyMedium
+                        ?.copyWith(color: scheme.onPrimaryContainer),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Placeholder in the Recent visits list before the first finished visit.
+class _NoVisitsCard extends StatelessWidget {
+  const _NoVisitsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Icon(Icons.park_outlined, color: scheme.outline),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No visits yet. Your first finished visit will appear here.',
+                style: textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

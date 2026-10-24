@@ -1,4 +1,4 @@
-package com.example.ecowell
+package aar.ecowell.app
 
 import io.flutter.embedding.android.FlutterActivity
 

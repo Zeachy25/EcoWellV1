@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geolocator_android/geolocator_android.dart';
 
 import '../../../core/services/location_service.dart';
 import '../../map/domain/geo_utils.dart';
@@ -28,11 +27,11 @@ class GeofenceService {
   final Future<List<GreenSpace>> Function() loadSpaces;
 
   // ---- tuning ----
-  static const _enterTolerance = 10.0; // m outside the edge that still counts
-  static const _exitDistance = 40.0; // m outside the edge = really left
+  static const _enterTolerance = 10.0; // only used for places without boundaries
+  static const _exitDistance = 10.0; // must be >10m away to count as leaving
   static const _maxAccuracy = 40.0; // ignore GPS readings worse than this (m)
-  static const _enterDwell = Duration(seconds: 10); // stay inside this long
-  static const _exitDwell = Duration(minutes: 2); // stay outside this long
+  static const Duration _enterDwell = Duration.zero; // immediate on polygon enter
+  static const _exitDwell = Duration(seconds: 5); // 5s after leaving
 
   final _controller = StreamController<GeofenceEvent>.broadcast();
   Stream<GeofenceEvent> get events => _controller.stream;
@@ -98,28 +97,46 @@ class GeofenceService {
   /// Call when a visit is finished or cancelled.
   void onVisitClosed() => setActivePlace(null);
 
-  /// For testing from home: pretends the user just entered [space].
-  /// With a [delay] you can press the button, minimize the app, and test
-  /// the arrival notification.
-  void simulateArrival(GreenSpace space, {Duration delay = Duration.zero}) {
-    void fire() {
-      _triggered.add(space.id);
-      _activePlaceId = space.id;
-      _controller.add(GeofenceEvent(GeofenceEventType.entered, space));
-    }
-
-    if (delay == Duration.zero) {
-      fire();
-    } else {
-      Timer(delay, fire);
-    }
-  }
-
   void _onPosition(Position p) {
     if (p.accuracy > _maxAccuracy) return;
     final now = DateTime.now();
 
     for (final s in _spaces) {
+      final hasBoundary = s.boundary.length >= 3;
+
+      if (hasBoundary) {
+        final insidePolygon = pointInPolygon(p.latitude, p.longitude, s.boundary);
+        if (insidePolygon) {
+          if (_activePlaceId == s.id) {
+            _outsideSince = null;
+            _exitEmitted = false;
+          }
+
+          final readyToTrigger = _activePlaceId == null && !_triggered.contains(s.id);
+          if (readyToTrigger) {
+            _triggered.add(s.id);
+            _activePlaceId = s.id;
+            _controller.add(GeofenceEvent(GeofenceEventType.entered, s));
+          }
+        } else {
+          final d = distanceToPolygonMeters(p.latitude, p.longitude, s.boundary);
+          if (d > _exitDistance) {
+            _insideSince.remove(s.id);
+            _triggered.remove(s.id);
+
+            if (_activePlaceId == s.id) {
+              _outsideSince ??= now;
+              if (!_exitEmitted && now.difference(_outsideSince!) >= _exitDwell) {
+                _exitEmitted = true;
+                _controller.add(GeofenceEvent(GeofenceEventType.exited, s));
+              }
+            }
+          }
+          // Between 0 and _exitDistance: do nothing (hysteresis)
+        }
+        continue;
+      }
+
       final d = distanceToGeofence(p, s);
 
       if (d <= _enterTolerance) {

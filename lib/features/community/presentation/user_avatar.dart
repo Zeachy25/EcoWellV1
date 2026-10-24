@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -28,7 +29,8 @@ class UserAvatar extends StatelessWidget {
     final inner = CircleAvatar(
       radius: radius,
       backgroundColor: AppColors.mintGreen,
-      foregroundImage: hasUrl ? NetworkImage(url!) : null,
+      // Cached, so avatars of the saved feed still show while offline.
+      foregroundImage: hasUrl ? CachedNetworkImageProvider(url!) : null,
       child: Text(
         initial,
         style: TextStyle(

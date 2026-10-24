@@ -23,7 +23,7 @@ class HeroBanner extends StatelessWidget {
         path,
         fit: BoxFit.cover,
         // Placeholder instead of a crash if a file is missing.
-        errorBuilder: (_, __, ___) => Container(color: _skyBlue),
+        errorBuilder: (_, _, _) => Container(color: _skyBlue),
       );
 
   @override

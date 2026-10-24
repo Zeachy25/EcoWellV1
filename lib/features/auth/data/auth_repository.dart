@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/legal.dart';
+import '../../../core/offline/json_cache.dart';
 
 class AuthRepository {
-  AuthRepository(this._client);
+  AuthRepository(this._client, {JsonCache? cache}) : _cache = cache;
   final SupabaseClient _client;
+  final JsonCache? _cache;
 
   static const minAge = 18;
   static const maxAge = 60;
@@ -101,7 +103,13 @@ class AuthRepository {
     );
   }
 
-  Future<void> signOut() => _client.auth.signOut();
+  /// Signs out and removes the personal snapshots kept for offline use
+  /// (profile, dashboard, feed, weather). Queued visits are left alone so
+  /// they can still be synced when this user is online again.
+  Future<void> signOut() async {
+    await _cache?.clearPersonal();
+    await _client.auth.signOut();
+  }
 
   static String _formatDate(DateTime d) => d.toIso8601String().substring(0, 10);
 
@@ -121,5 +129,8 @@ class AuthRepository {
 }
 
 final authRepositoryProvider = Provider<AuthRepository>(
-  (ref) => AuthRepository(Supabase.instance.client),
+  (ref) => AuthRepository(
+    Supabase.instance.client,
+    cache: ref.watch(jsonCacheProvider),
+  ),
 );

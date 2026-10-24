@@ -18,8 +18,8 @@ class NotificationService {
 
   final StreamController<String> _taps = StreamController<String>.broadcast();
 
-  /// Payloads of notifications the user tapped: "arrival:<placeId>" or
-  /// "exit:<placeId>".
+  /// Payloads of notifications the user tapped: "arrival:placeId" or
+  /// "exit:placeId".
   Stream<String> get taps => _taps.stream;
 
   bool _ready = false;

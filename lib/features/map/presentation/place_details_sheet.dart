@@ -10,7 +10,6 @@ class PlaceDetailsSheet extends StatelessWidget {
     required this.space,
     required this.onDirections,
     this.distanceMeters,
-    this.onSimulateArrival,
   });
 
   final GreenSpace space;
@@ -18,9 +17,6 @@ class PlaceDetailsSheet extends StatelessWidget {
 
   /// Opens the in-app directions screen.
   final VoidCallback onDirections;
-
-  /// Only set when the test flag is on (lib/core/dev_flags.dart).
-  final void Function(Duration delay)? onSimulateArrival;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +34,15 @@ class PlaceDetailsSheet extends StatelessWidget {
               style:
                   textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
+            if (space.address != null && space.address!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                space.address!,
+                style: textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -67,29 +72,6 @@ class PlaceDetailsSheet extends StatelessWidget {
               'Your check-in starts automatically when you arrive.',
               style: textTheme.bodySmall,
             ),
-            if (onSimulateArrival != null)
-              Align(
-                alignment: Alignment.center,
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onSimulateArrival!(Duration.zero);
-                      },
-                      child: const Text('Test: simulate arrival'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onSimulateArrival!(const Duration(seconds: 10));
-                      },
-                      child: const Text('Test: arrival in 10 s (minimize app)'),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),

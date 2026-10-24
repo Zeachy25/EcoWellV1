@@ -56,7 +56,7 @@ class _HomeSearchBarState extends State<HomeSearchBar> {
               const Icon(Icons.search, color: Colors.white70, size: 20),
           suffixIcon: ValueListenableBuilder<String>(
             valueListenable: homeSearchQuery,
-            builder: (_, q, __) => q.isEmpty
+            builder: (_, q, _) => q.isEmpty
                 ? const SizedBox.shrink()
                 : IconButton(
                     icon: const Icon(Icons.close,

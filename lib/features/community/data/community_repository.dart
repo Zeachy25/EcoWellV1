@@ -1,12 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/offline/json_cache.dart';
 import '../domain/community_models.dart';
 
 class CommunityRepository {
-  CommunityRepository(this._client);
+  CommunityRepository(this._client, this._cache);
   final SupabaseClient _client;
+  final JsonCache _cache;
 
   static const _bucket = 'post-media';
 
@@ -19,21 +22,37 @@ class CommunityRepository {
 
   // ---- feed ----------------------------------------------------------------
 
+  /// The first page of the feed is also kept on the phone, so Explore can
+  /// show the last posts the user saw without a connection.
   Future<List<FeedPost>> fetchFeed({
     DateTime? before,
     bool followingOnly = false,
     int limit = 20,
   }) async {
-    final res = await _client.rpc('get_feed', params: {
-      'p_limit': limit,
-      'p_before': before?.toUtc().toIso8601String(),
-      'p_following_only': followingOnly,
-    });
-    return [
-      for (final r in (res as List<dynamic>))
-        FeedPost.fromJson(Map<String, dynamic>.from(r as Map)),
-    ];
+    final firstPage = before == null;
+    final cacheKey =
+        followingOnly ? CacheKeys.feedFollowing : CacheKeys.feedAll;
+    try {
+      final res = await _client.rpc('get_feed', params: {
+        'p_limit': limit,
+        'p_before': before?.toUtc().toIso8601String(),
+        'p_following_only': followingOnly,
+      }).timeout(const Duration(seconds: 8));
+      if (firstPage) await _cache.write(cacheKey, res);
+      return _parseFeed(res);
+    } catch (e) {
+      if (!firstPage) rethrow;
+      debugPrint('Feed fetch failed, trying cache: $e');
+      final cached = await _cache.read(cacheKey);
+      if (cached is List) return _parseFeed(cached);
+      rethrow;
+    }
   }
+
+  List<FeedPost> _parseFeed(Object? rows) => [
+        for (final r in (rows as List<dynamic>))
+          FeedPost.fromJson(Map<String, dynamic>.from(r as Map)),
+      ];
 
   // ---- posting ---------------------------------------------------------------
 
@@ -156,6 +175,63 @@ class CommunityRepository {
     await _client.from('post_comments').delete().eq('id', commentId);
   }
 
+  // ---- place likes and comments ---------------------------------------------
+
+  /// Like / comment counts per place (keyed by place id). One RPC call for
+  /// the whole Home list. Non-fatal for callers if the place_social tables
+  /// have not been created yet.
+  Future<Map<String, PlaceSocial>> fetchPlaceSocial() async {
+    final res = await _client
+        .rpc('get_place_social')
+        .timeout(const Duration(seconds: 8));
+    final map = <String, PlaceSocial>{};
+    for (final r in (res as List<dynamic>)) {
+      final s = PlaceSocial.fromJson(Map<String, dynamic>.from(r as Map));
+      map[s.placeId] = s;
+    }
+    return map;
+  }
+
+  Future<void> setPlaceLike(String placeId, bool like) async {
+    if (like) {
+      await _client.from('place_likes').upsert(
+        {'place_id': placeId, 'user_id': currentUserId},
+        onConflict: 'place_id,user_id',
+        ignoreDuplicates: true,
+      );
+    } else {
+      await _client
+          .from('place_likes')
+          .delete()
+          .eq('place_id', placeId)
+          .eq('user_id', currentUserId);
+    }
+  }
+
+  Future<List<PlaceComment>> fetchPlaceComments(String placeId) async {
+    final res = await _client
+        .from('place_comments')
+        .select('id, user_id, body, created_at, author:profiles(full_name, avatar_url)')
+        .eq('place_id', placeId)
+        .order('created_at', ascending: true);
+    return [
+      for (final r in (res as List<dynamic>))
+        PlaceComment.fromJson(Map<String, dynamic>.from(r as Map)),
+    ];
+  }
+
+  Future<void> addPlaceComment(String placeId, String body) async {
+    await _client.from('place_comments').insert({
+      'place_id': placeId,
+      'user_id': currentUserId,
+      'body': body.trim(),
+    });
+  }
+
+  Future<void> deletePlaceComment(String commentId) async {
+    await _client.from('place_comments').delete().eq('id', commentId);
+  }
+
   // ---- My Day ------------------------------------------------------------------
 
   /// Active My Days of you and the people you follow, grouped per person:
@@ -242,6 +318,34 @@ class CommunityRepository {
 
   // ---- people --------------------------------------------------------------------
 
+  /// Everyone the signed-in user follows (display name + avatar).
+  Future<List<FollowedUser>> fetchFollowing() async {
+    final res = await _client.rpc('get_following_profiles');
+    return [
+      for (final r in (res as List<dynamic>))
+        FollowedUser.fromJson(Map<String, dynamic>.from(r as Map)),
+    ];
+  }
+
+  /// One user's posts, in the same shape as the feed (profile screen).
+  /// The first (only) page is cached per user, so a timeline that was
+  /// loaded while online still shows without a connection.
+  Future<List<FeedPost>> fetchUserPosts(String userId) async {
+    final cacheKey = CacheKeys.userPosts(userId);
+    try {
+      final res = await _client
+          .rpc('get_user_posts', params: {'p_user_id': userId})
+          .timeout(const Duration(seconds: 8));
+      await _cache.write(cacheKey, res);
+      return _parseFeed(res);
+    } catch (e) {
+      debugPrint('User posts fetch failed, trying cache: $e');
+      final cached = await _cache.read(cacheKey);
+      if (cached is List) return _parseFeed(cached);
+      rethrow;
+    }
+  }
+
   Future<List<SuggestedUser>> fetchSuggested({int limit = 10}) async {
     final res =
         await _client.rpc('get_suggested_users', params: {'p_limit': limit});
@@ -269,5 +373,8 @@ class CommunityRepository {
 }
 
 final communityRepositoryProvider = Provider<CommunityRepository>(
-  (ref) => CommunityRepository(Supabase.instance.client),
+  (ref) => CommunityRepository(
+    Supabase.instance.client,
+    ref.watch(jsonCacheProvider),
+  ),
 );

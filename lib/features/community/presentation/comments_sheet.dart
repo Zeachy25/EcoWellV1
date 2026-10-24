@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/format.dart';
@@ -113,6 +113,14 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     }
   }
 
+  /// Tap on a commenter: close this sheet, then open their profile.
+  void _openProfile(String userId) {
+    final navigator = Navigator.of(context);
+    final router = GoRouter.of(context);
+    navigator.pop();
+    router.push('/u/$userId');
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -196,7 +204,11 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              UserAvatar(name: c.authorName, url: c.authorAvatar, radius: 16),
+              GestureDetector(
+                onTap: () => _openProfile(c.userId),
+                child: UserAvatar(
+                    name: c.authorName, url: c.authorAvatar, radius: 16),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -205,11 +217,15 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            c.authorName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          child: GestureDetector(
+                            onTap: () => _openProfile(c.userId),
+                            child: Text(
+                              c.authorName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),

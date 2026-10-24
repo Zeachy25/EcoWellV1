@@ -22,11 +22,36 @@ const _months = [
 /// "Oct 15"
 String formatShortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
 
+const _monthsFull = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/// "October 2026" — profile "Joined" date.
+String formatMonthYear(DateTime d) => '${_monthsFull[d.month - 1]} ${d.year}';
+
 /// "3:05 PM"
 String formatTime(DateTime d) {
   final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
   final m = d.minute.toString().padLeft(2, '0');
   return '$h:$m ${d.hour >= 12 ? 'PM' : 'AM'}';
+}
+
+/// 12:05" / "1:05:09" for run timers (seconds -> m:ss or h:mm:ss)
+String formatTimer(int seconds) {
+  final h = seconds ~/ 3600;
+  final m = (seconds % 3600) ~/ 60;
+  final s = seconds % 60;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
+}
+
+/// 342 -> "5:42", null -> "-" (minutes:seconds per kilometre)
+String formatPace(int? secondsPerKm) {
+  if (secondsPerKm == null || secondsPerKm <= 0) return '-';
+  final m = secondsPerKm ~/ 60;
+  final s = secondsPerKm % 60;
+  return '$m:${s.toString().padLeft(2, '0')}';
 }
 
 /// 950 -> "950", 18300 -> "18.3k", 1250000 -> "1.3M"

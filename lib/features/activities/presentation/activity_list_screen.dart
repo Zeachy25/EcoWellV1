@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,8 +14,6 @@ class ActivityListScreen extends ConsumerWidget {
     switch (type) {
       case 'grounding':
         return 'Grounding exercises';
-      case 'quick_run':
-        return 'Quick Run';
       default:
         return 'Breathing exercises';
     }

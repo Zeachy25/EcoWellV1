@@ -147,6 +147,95 @@ class PostComment {
   }
 }
 
+/// Like / comment counts for a green space (from get_place_social).
+class PlaceSocial {
+  const PlaceSocial({
+    required this.placeId,
+    required this.likeCount,
+    required this.commentCount,
+    required this.likedByMe,
+  });
+
+  final String placeId;
+  final int likeCount;
+  final int commentCount;
+  final bool likedByMe;
+
+  PlaceSocial copyWith({int? likeCount, int? commentCount, bool? likedByMe}) {
+    return PlaceSocial(
+      placeId: placeId,
+      likeCount: likeCount ?? this.likeCount,
+      commentCount: commentCount ?? this.commentCount,
+      likedByMe: likedByMe ?? this.likedByMe,
+    );
+  }
+
+  factory PlaceSocial.fromJson(Map<String, dynamic> j) {
+    return PlaceSocial(
+      placeId: j['place_id'] as String,
+      likeCount: (j['like_count'] as num?)?.toInt() ?? 0,
+      commentCount: (j['comment_count'] as num?)?.toInt() ?? 0,
+      likedByMe: (j['liked_by_me'] as bool?) ?? false,
+    );
+  }
+}
+
+/// A comment on a green space (place_comments table).
+class PlaceComment {
+  const PlaceComment({
+    required this.id,
+    required this.userId,
+    required this.authorName,
+    required this.body,
+    required this.createdAt,
+    this.authorAvatar,
+  });
+
+  final String id;
+  final String userId;
+  final String authorName;
+  final String? authorAvatar;
+  final String body;
+  final DateTime createdAt;
+
+  factory PlaceComment.fromJson(Map<String, dynamic> j) {
+    final authorRaw = j['author'];
+    final author =
+        authorRaw is Map ? Map<String, dynamic>.from(authorRaw) : null;
+    final raw = ((author?['full_name'] as String?) ?? '').trim();
+    return PlaceComment(
+      id: j['id'] as String,
+      userId: (j['user_id'] as String?) ?? '',
+      authorName: raw.isEmpty ? 'EcoWell user' : raw,
+      authorAvatar: author?['avatar_url'] as String?,
+      body: (j['body'] as String?) ?? '',
+      createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
+    );
+  }
+}
+
+/// Someone the signed-in user follows (from get_following_profiles).
+class FollowedUser {
+  const FollowedUser({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+  });
+
+  final String id;
+  final String name;
+  final String? avatarUrl;
+
+  factory FollowedUser.fromJson(Map<String, dynamic> j) {
+    final raw = ((j['full_name'] as String?) ?? '').trim();
+    return FollowedUser(
+      id: (j['user_id'] as String?) ?? (j['id'] as String?) ?? '',
+      name: raw.isEmpty ? 'EcoWell user' : raw,
+      avatarUrl: j['avatar_url'] as String?,
+    );
+  }
+}
+
 class SuggestedUser {
   const SuggestedUser({
     required this.id,

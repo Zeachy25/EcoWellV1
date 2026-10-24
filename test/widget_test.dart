@@ -1,30 +1,37 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ecowell/main.dart';
+import 'package:ecowell/features/visit/domain/visit_models.dart';
+import 'package:ecowell/features/visit/presentation/visit_result_view.dart';
+import 'package:ecowell/shared/widgets/offline_strip.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('offline strip explains that saved content is shown',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: OfflineStrip())),
+    );
+    expect(find.text('You are offline. Showing saved content.'), findsOneWidget);
+    expect(find.byIcon(Icons.wifi_off), findsOneWidget);
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('visit result says it will sync when back online',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: VisitResultView(
+          result: const VisitResult(
+            preScore: 10,
+            postScore: 7,
+            stressReductionScore: 3,
+            streakCount: 2,
+            longestStreak: 5,
+          ),
+          pendingSync: true,
+          onDone: () {},
+        ),
+      ),
+    ));
+    expect(find.textContaining('Saved on this phone'), findsOneWidget);
   });
 }

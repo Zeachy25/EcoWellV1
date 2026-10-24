@@ -20,6 +20,18 @@ class LocationService {
     }
   }
 
+  /// True when tracking with the screen off is allowed. Android calls
+  /// this "Allow all the time" (LocationPermission.always).
+  static Future<bool> hasBackgroundPermission() async {
+    try {
+      return await Geolocator.checkPermission() ==
+          LocationPermission.always;
+    } catch (e) {
+      debugPrint('Background permission check error: $e');
+      return false;
+    }
+  }
+
   /// The position ONLY if location is already allowed. Never shows a
   /// permission prompt, so it is safe to call as soon as the Home tab opens.
   static Future<Position?> positionIfPermitted() async {

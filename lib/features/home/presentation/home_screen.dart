@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../shared/widgets/ecowell_logo.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../community/presentation/suggested_users_section.dart';
 import '../../map/data/map_providers.dart';
 import '../../visit/data/visit_providers.dart';
 import '../../visit/domain/visit_models.dart';
@@ -140,9 +142,10 @@ class HomeScreen extends ConsumerWidget {
             Padding(padding: _pad(context), child: const WeatherCard()),
 
             SizedBox(height: Responsive.size(context, 22)),
-            const _SectionTitle(title: 'Who to Follow'),
-            SizedBox(height: Responsive.size(context, 10)),
-            const _FollowRow(),
+            Padding(
+              padding: _pad(context),
+              child: const SuggestedUsersSection(title: 'Who to Follow'),
+            ),
 
             SizedBox(height: Responsive.size(context, 22)),
             const _SectionTitle(title: 'Wellness Score by Location'),
@@ -421,70 +424,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _FollowRow extends StatelessWidget {
-  const _FollowRow();
-
-  Widget _card(BuildContext context, String name, String handle) => Container(
-        width: Responsive.size(context, 150),
-        margin: const EdgeInsets.only(right: 12),
-        padding: EdgeInsets.all(Responsive.size(context, 12)),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: Responsive.size(context, 24),
-              backgroundColor: AppColors.mintSoft,
-              child: Text(name[0],
-                  style: const TextStyle(
-                      color: AppColors.forestDark,
-                      fontWeight: FontWeight.w800)),
-            ),
-            SizedBox(height: Responsive.size(context, 6)),
-            Text(name,
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: Responsive.fontSize(context, 13))),
-            Text(handle,
-                style: TextStyle(
-                    color: AppColors.textTertiary,
-                    fontSize: Responsive.fontSize(context, 11))),
-            SizedBox(height: Responsive.size(context, 8)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.streakOrange,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text('Follow',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: Responsive.fontSize(context, 11))),
-            ),
-          ],
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: Responsive.size(context, 150),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: HomeScreen._pad(context),
-        children: [
-          _card(context, 'Sample User', '@sample'),
-          _card(context, 'Another User', '@another'),
-        ],
-      ),
-    );
-  }
-}
-
 // ───────────────── Places (real green spaces + search) ─────────────────
 
 class _PlacesSection extends ConsumerWidget {
@@ -656,12 +595,12 @@ class _PlaceCard extends StatelessWidget {
             width: double.infinity,
             child: imageUrl == null
                 ? _fallback()
-                : Image.network(
-                    imageUrl!,
+                : CachedNetworkImage(
+                    // Cached, so the places list still has photos offline.
+                    imageUrl: imageUrl!,
                     fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) =>
-                        progress == null ? child : _fallback(),
-                    errorBuilder: (context, error, stack) => _fallback(),
+                    placeholder: (context, url) => _fallback(),
+                    errorWidget: (context, url, error) => _fallback(),
                   ),
           ),
           Padding(

@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/location_service.dart';
 import '../../../core/utils/format.dart';
@@ -114,6 +114,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
           _error = 'Could not get directions right now.';
         });
       }
+    }
+  }
+
+  /// Fallback when in-app directions cannot be fetched (no connection,
+  /// routing quota, ...): hand the trip to the Google Maps app.
+  Future<void> _openInGoogleMaps() async {
+    final uri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': '${widget.space.lat},${widget.space.lng}',
+      'travelmode': 'walking',
+    });
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Open in Google Maps failed: $e');
     }
   }
 
@@ -233,6 +248,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         message: _error!,
         onRetry: _begin,
         onClose: () => context.pop(),
+        onOpenExternal: _openInGoogleMaps,
       );
     }
     final route = _route;
@@ -578,11 +594,13 @@ class _ErrorView extends StatelessWidget {
     required this.message,
     required this.onRetry,
     required this.onClose,
+    this.onOpenExternal,
   });
 
   final String message;
   final VoidCallback onRetry;
   final VoidCallback onClose;
+  final VoidCallback? onOpenExternal;
 
   @override
   Widget build(BuildContext context) {
@@ -598,6 +616,11 @@ class _ErrorView extends StatelessWidget {
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 20),
             FilledButton(onPressed: onRetry, child: const Text('Try again')),
+            if (onOpenExternal != null)
+              TextButton(
+                onPressed: onOpenExternal,
+                child: const Text('Open in Google Maps'),
+              ),
             TextButton(onPressed: onClose, child: const Text('Close')),
           ],
         ),

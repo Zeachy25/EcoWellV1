@@ -24,6 +24,31 @@ class WeatherData {
   final bool isDay;
   final String placeLabel;
 
+  /// Used to keep the last known weather on the phone for offline Home.
+  Map<String, dynamic> toJson() => {
+        'temp_c': tempC,
+        'feels_like_c': feelsLikeC,
+        'humidity': humidity,
+        'wind_kmh': windKmh,
+        'uv_index': uvIndex,
+        'precipitation_mm': precipitationMm,
+        'code': code,
+        'is_day': isDay,
+        'place_label': placeLabel,
+      };
+
+  factory WeatherData.fromJson(Map<String, dynamic> j) => WeatherData(
+        tempC: (j['temp_c'] as num?)?.toDouble() ?? 0,
+        feelsLikeC: (j['feels_like_c'] as num?)?.toDouble() ?? 0,
+        humidity: (j['humidity'] as num?)?.toInt() ?? 0,
+        windKmh: (j['wind_kmh'] as num?)?.toDouble() ?? 0,
+        uvIndex: (j['uv_index'] as num?)?.toDouble() ?? 0,
+        precipitationMm: (j['precipitation_mm'] as num?)?.toDouble() ?? 0,
+        code: (j['code'] as num?)?.toInt() ?? 3,
+        isDay: (j['is_day'] as bool?) ?? true,
+        placeLabel: (j['place_label'] as String?) ?? 'Near you',
+      );
+
   String get description {
     final c = code;
     if (c == 0) return isDay ? 'Clear sky' : 'Clear night';

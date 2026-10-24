@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -22,6 +23,7 @@ class PostCard extends StatefulWidget {
     required this.onComments,
     required this.onShare,
     required this.onMenu,
+    this.onAuthorTap,
   });
 
   final FeedPost post;
@@ -30,6 +32,9 @@ class PostCard extends StatefulWidget {
   final VoidCallback onComments;
   final VoidCallback onShare;
   final ValueChanged<PostMenuAction> onMenu;
+
+  /// Opens the author's profile when set (tap on avatar or name).
+  final ValueChanged<String>? onAuthorTap;
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -51,25 +56,23 @@ class _PostCardState extends State<PostCard> {
   }
 
   Widget _photoBox(String path) {
-    final placeholder = Container(
-      color: AppColors.cardBorder,
-      child: const Center(
-        child:
-            Icon(Icons.image_outlined, size: 48, color: AppColors.textTertiary),
-      ),
-    );
-    return Image.network(
-      CommunityRepository.photoUrl(path),
+    // Cached, so a saved feed still shows its photos without a connection.
+    return CachedNetworkImage(
+      imageUrl: CommunityRepository.photoUrl(path),
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
-      errorBuilder: (_, __, ___) => placeholder,
-      loadingBuilder: (_, child, progress) => progress == null
-          ? child
-          : Container(
-              color: AppColors.cardBorder,
-              child: const Center(child: CircularProgressIndicator()),
-            ),
+      errorWidget: (_, _, _) => Container(
+        color: AppColors.cardBorder,
+        child: const Center(
+          child:
+              Icon(Icons.image_outlined, size: 48, color: AppColors.textTertiary),
+        ),
+      ),
+      placeholder: (_, _) => Container(
+        color: AppColors.cardBorder,
+        child: const Center(child: CircularProgressIndicator()),
+      ),
     );
   }
 
@@ -143,25 +146,35 @@ class _PostCardState extends State<PostCard> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  UserAvatar(
-                    name: p.author.name,
-                    url: p.author.avatarUrl,
-                    radius: 20,
-                    ring: true,
+                  GestureDetector(
+                    onTap: widget.onAuthorTap == null
+                        ? null
+                        : () => widget.onAuthorTap!(p.author.id),
+                    child: UserAvatar(
+                      name: p.author.name,
+                      url: p.author.avatarUrl,
+                      radius: 20,
+                      ring: true,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          p.author.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: Responsive.fontSize(context, 15),
-                            color: AppColors.textPrimary,
+                        GestureDetector(
+                          onTap: widget.onAuthorTap == null
+                              ? null
+                              : () => widget.onAuthorTap!(p.author.id),
+                          child: Text(
+                            p.author.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: Responsive.fontSize(context, 15),
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -225,15 +238,6 @@ class _PostCardState extends State<PostCard> {
                       PopupMenuButton<PostMenuAction>(
                     tooltip: 'More',
                     padding: EdgeInsets.zero,
-                    child: const SizedBox(
-                      width: 28,
-                      height: 32,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Icon(Icons.more_horiz,
-                            size: 22, color: AppColors.textSecondary),
-                      ),
-                    ),
                     onSelected: widget.onMenu,
                     itemBuilder: (_) => [
                       if (widget.isMine)
@@ -247,6 +251,15 @@ class _PostCardState extends State<PostCard> {
                           child: Text('Report post'),
                         ),
                     ],
+                    child: const SizedBox(
+                      width: 28,
+                      height: 32,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Icon(Icons.more_horiz,
+                            size: 22, color: AppColors.textSecondary),
+                      ),
+                    ),
                   ),
                     ],
                   ),

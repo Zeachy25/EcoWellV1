@@ -1,9 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/offline/connectivity_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../community/data/community_repository.dart';
@@ -36,6 +36,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   bool _followingOnly = false;
   int _suggestedKey = 0;
   List<MyDayStory> _stories = [];
+  List<FollowedUser> _following = [];
 
   CommunityRepository get _repo => ref.read(communityRepositoryProvider);
 
@@ -45,6 +46,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     _scroll.addListener(_onScroll);
     _load();
     _loadStories();
+    _loadFollowing();
   }
 
   @override
@@ -105,7 +107,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
   Future<void> _refresh() async {
     setState(() => _suggestedKey++);
-    await Future.wait([_load(), _loadStories()]);
+    await Future.wait([_load(), _loadStories(), _loadFollowing()]);
   }
 
   void _setFilter(bool followingOnly) {
@@ -133,7 +135,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  /// Actions that write to the server wait for the connection.
+  bool _requireOnline() {
+    if (ref.read(isOnlineProvider)) return true;
+    _message('This needs a connection. You are offline right now.');
+    return false;
+  }
+
   Future<void> _toggleLike(FeedPost post) async {
+    if (!_requireOnline()) return;
     final liked = !post.likedByMe;
     _replace(post.copyWith(
       likedByMe: liked,
@@ -243,6 +253,28 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     }
   }
 
+  Future<void> _loadFollowing() async {
+    try {
+      final list = await _repo.fetchFollowing();
+      if (!mounted) return;
+      setState(() => _following = list);
+    } catch (e) {
+      debugPrint('Following error: $e');
+    }
+  }
+
+  /// Tap on someone you follow: their My Day if they have one active,
+  /// otherwise their profile with the posts they shared.
+  void _openFollowedUser(FollowedUser user) {
+    for (final s in _stories) {
+      if (s.userId == user.id) {
+        _openStory(s);
+        return;
+      }
+    }
+    context.push('/u/${user.id}');
+  }
+
   Future<void> _openStory(MyDayStory story) async {
     final index = _stories.indexOf(story);
     if (index < 0) return;
@@ -257,6 +289,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
   /// "Share a moment from your visit" adds to My Day (not to the feed).
   Future<void> _createMyDay() async {
+    if (!_requireOnline()) return;
     final created = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => const CreatePostScreen(myDay: true),
@@ -269,6 +302,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   Future<void> _create() async {
+    if (!_requireOnline()) return;
     final created = await context.push<bool>('/post/new');
     if (created == true) {
       _message('Your post is live.');
@@ -283,6 +317,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final myName = (p?['full_name'] as String?) ?? '';
     final myAvatar = p?['avatar_url'] as String?;
     final myId = _repo.currentUserId;
+    final online = ref.watch(isOnlineProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -295,7 +330,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           IconButton(
             tooltip: 'New post',
             onPressed: _create,
-            icon: const Icon(Icons.add_box_outlined),
+            icon: const Icon(Icons.add_a_photo),
           ),
         ],
       ),
@@ -311,14 +346,22 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             Responsive.size(context, 24),
           ),
           children: [
+            // The feed below is the last saved copy while offline.
+            if (!online) ...[
+              const _OfflineFeedNote(),
+              SizedBox(height: Responsive.size(context, 12)),
+            ],
+
             // My Day stories (only shown here, never in the feed)
             MyDayRow(
               stories: _stories,
+              following: _following,
               myId: myId,
               myName: myName,
               myAvatar: myAvatar,
               onAdd: _createMyDay,
               onOpen: _openStory,
+              onOpenUser: _openFollowedUser,
             ),
             SizedBox(height: Responsive.size(context, 16)),
 
@@ -410,6 +453,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           onComments: () => _openComments(post),
           onShare: () => _share(post),
           onMenu: (a) => _onMenu(post, a),
+          onAuthorTap: (userId) => context.push('/u/$userId'),
         ),
       if (_loadingMore)
         const Padding(
@@ -417,5 +461,34 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           child: Center(child: CircularProgressIndicator()),
         ),
     ];
+  }
+}
+/// Shown at the top of Explore while offline: what is listed is the last
+/// feed that was saved on the phone.
+class _OfflineFeedNote extends StatelessWidget {
+  const _OfflineFeedNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.orangeLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.streakOrange.withValues(alpha: 0.4)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.cloud_off, size: 18, color: AppColors.streakOrange),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'You are offline. Showing the last posts you saw.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

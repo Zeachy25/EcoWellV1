@@ -11,6 +11,7 @@ class GreenSpace {
     required this.boundary,
     this.description,
     this.category,
+    this.address,
     this.photoUrl,
     this.quietScoreAvg,
     this.quietRatingCount = 0,
@@ -20,6 +21,7 @@ class GreenSpace {
   final String name;
   final String? description;
   final String? category;
+  final String? address;
   final String? photoUrl;
   final double lat;
   final double lng;
@@ -33,6 +35,7 @@ class GreenSpace {
       name: json['name'] as String,
       description: json['description'] as String?,
       category: json['category'] as String?,
+      address: json['address'] as String?,
       photoUrl: json['photo_url'] as String?,
       lat: (json['lat'] as num).toDouble(),
       lng: (json['lng'] as num).toDouble(),

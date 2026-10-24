@@ -6,32 +6,42 @@ import 'user_avatar.dart';
 
 enum _Ring { none, unseen, seen }
 
-/// Top of Explore: "Your day" tile with the "Share a moment from your visit"
-/// box beside it. Below that, a row with the My Days of people you follow
-/// (only shown when there are some). Orange ring = not watched yet,
-/// grey = watched.
+/// Top of Explore: "Your day" tile beside a scrollable row of the people you
+/// follow (hidden when you follow nobody). Orange ring = the person has a
+/// My Day you have not watched yet; tapping opens their My Day or profile.
 class MyDayRow extends StatelessWidget {
   const MyDayRow({
     super.key,
     required this.stories,
+    required this.following,
     required this.myId,
     required this.myName,
     required this.onAdd,
     required this.onOpen,
+    required this.onOpenUser,
     this.myAvatar,
   });
 
   final List<MyDayStory> stories;
+
+  /// Everyone the user follows (shown beside "Your day").
+  final List<FollowedUser> following;
+
   final String myId;
   final String myName;
   final String? myAvatar;
   final VoidCallback onAdd;
   final ValueChanged<MyDayStory> onOpen;
+  final ValueChanged<FollowedUser> onOpenUser;
 
   @override
   Widget build(BuildContext context) {
     final mine = stories.where((s) => s.userId == myId).firstOrNull;
     final others = stories.where((s) => s.userId != myId).toList();
+    final unseenIds = {
+      for (final s in others)
+        if (s.hasUnseen) s.userId,
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,86 +58,38 @@ class MyDayRow extends StatelessWidget {
               onTap: mine == null ? onAdd : () => onOpen(mine),
               onPlus: onAdd,
             ),
-            const SizedBox(width: 12),
-            Expanded(child: _ShareBox(onTap: onAdd)),
+            if (following.isNotEmpty) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 84,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: following.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, i) {
+                      final u = following[i];
+                      return _Tile(
+                        label: u.name.split(' ').first,
+                        name: u.name,
+                        url: u.avatarUrl,
+                        ring: unseenIds.contains(u.id)
+                            ? _Ring.unseen
+                            : _Ring.none,
+                        onTap: () => onOpenUser(u),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
-        if (others.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 96,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: others.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, i) {
-                final s = others[i];
-                return _Tile(
-                  label: s.name.split(' ').first,
-                  name: s.name,
-                  url: s.avatarUrl,
-                  ring: s.hasUnseen ? _Ring.unseen : _Ring.seen,
-                  onTap: () => onOpen(s),
-                );
-              },
-            ),
-          ),
-        ],
       ],
     );
   }
 }
 
-/// "Share a moment from your visit..." with the camera-plus icon on the left.
-/// Same height as the avatar next to it (2 * (28 + 3) = 62).
-class _ShareBox extends StatelessWidget {
-  const _ShareBox({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.cardBorder),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 62,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    color: AppColors.streakOrange,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.add_a_photo, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Share a moment from your visit...',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _Tile extends StatelessWidget {
   const _Tile({

@@ -7,10 +7,15 @@ class VisitResultView extends StatelessWidget {
     super.key,
     required this.result,
     required this.onDone,
+    this.pendingSync = false,
   });
 
   final VisitResult result;
   final VoidCallback onDone;
+
+  /// True when the visit was saved on the phone and is waiting for the
+  /// connection to reach the server.
+  final bool pendingSync;
 
   String get _message {
     final r = result.stressReductionScore;
@@ -82,6 +87,30 @@ class VisitResultView extends StatelessWidget {
                 '${result.longestStreak == 1 ? 'day' : 'days'}'),
           ),
           const SizedBox(height: 16),
+          if (pendingSync) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: scheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.cloud_off, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Saved on this phone. Your visit and scores will be '
+                      'synced when you are back online.',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           FilledButton(onPressed: onDone, child: const Text('Done')),
           const SizedBox(height: 8),
           Text(

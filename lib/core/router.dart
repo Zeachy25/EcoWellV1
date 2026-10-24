@@ -9,6 +9,7 @@ import '../features/activities/presentation/activity_list_screen.dart';
 import '../features/activities/presentation/activity_runner_screen.dart';
 import '../features/auth/presentation/complete_profile_screen.dart';
 import '../features/community/presentation/create_post_screen.dart';
+import '../features/community/presentation/user_profile_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/legal_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -20,6 +21,8 @@ import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/map/domain/green_space.dart';
 import '../features/navigation/presentation/navigation_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
+import '../features/runs/presentation/record_run_screen.dart';
+import '../features/runs/presentation/run_history_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/visit/presentation/visit_flow_screen.dart';
 import 'auth_flags.dart';
@@ -88,13 +91,13 @@ final GoRouter appRouter = GoRouter(
     return null;
   },
   routes: [
-    GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-    GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
-    GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-    GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+    GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+    GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
+    GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+    GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
     GoRoute(
       path: '/forgot-password',
-      builder: (_, __) => const ForgotPasswordScreen(),
+      builder: (_, _) => const ForgotPasswordScreen(),
     ),
     GoRoute(
       path: '/verify-email',
@@ -106,9 +109,9 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/reset-password',
-      builder: (_, __) => const ResetPasswordScreen(),
+      builder: (_, _) => const ResetPasswordScreen(),
     ),
-    GoRoute(path: '/legal', builder: (_, __) => const LegalScreen()),
+    GoRoute(path: '/legal', builder: (_, _) => const LegalScreen()),
     GoRoute(
       path: '/complete-profile',
       builder: (_, state) => CompleteProfileScreen(
@@ -116,9 +119,18 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     // After login the user lands in the main app frame (Home tab first).
-    GoRoute(path: '/home', builder: (_, __) => const MainShell()),
+    GoRoute(path: '/home', builder: (_, _) => const MainShell()),
     // Share a moment (new post for the Explore feed).
-    GoRoute(path: '/post/new', builder: (_, __) => const CreatePostScreen()),
+    GoRoute(path: '/post/new', builder: (_, _) => const CreatePostScreen()),
+    // Facebook-style profile of any user (path param = user id).
+    GoRoute(
+      path: '/u/:id',
+      builder: (_, state) =>
+          UserProfileScreen(userId: state.pathParameters['id'] ?? ''),
+    ),
+    // Quick Run: the GPS walk/run recorder and its history.
+    GoRoute(path: '/run', builder: (_, _) => const RecordRunScreen()),
+    GoRoute(path: '/runs', builder: (_, _) => const RunHistoryScreen()),
     // Guided activities: a list by type, and the step-by-step runner.
     GoRoute(
       path: '/activities/:type',

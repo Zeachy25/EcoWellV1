@@ -1,20 +1,21 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/offline/json_cache.dart';
 import '../../dashboard/data/dashboard_repository.dart';
 import '../../geofence/data/geofence_providers.dart';
 import '../../home/data/profile_providers.dart';
 import '../../map/domain/green_space.dart';
+import '../data/offline_visit_store.dart';
 import '../data/visit_providers.dart';
 import '../data/visit_repository.dart';
 import '../domain/visit_models.dart';
 import 'pss_questionnaire.dart';
 import 'quiet_rating_step.dart';
+import 'streak_popup.dart';
 import 'visit_result_view.dart';
 
 enum _Step { loading, pre, active, post, rating, result, error }
@@ -36,6 +37,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   List<int>? _postAnswers;
   VisitResult? _result;
   bool _busy = false;
+  bool _pendingSync = false;
   Timer? _timer;
   Duration _elapsed = Duration.zero;
 
@@ -61,7 +63,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
   Future<void> _start() async {
     setState(() => _step = _Step.loading);
     try {
-      final v = await _repo.startOrResume(widget.space.id);
+      final v = await _repo.startOrResume(widget.space);
       if (!mounted) return;
       ref.read(geofenceServiceProvider).setActivePlace(widget.space.id);
       setState(() {
@@ -110,20 +112,37 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
     });
   }
 
+  /// The streak before this visit, from the last synced profile cache.
+  Future<int> _previousStreak() async {
+    final raw = await ref.read(jsonCacheProvider).read(CacheKeys.profile);
+    final streak = raw is Map ? raw['streak_count'] : null;
+    return streak is num ? streak.toInt() : 0;
+  }
+
   Future<void> _submitRating(int rating) async {
     setState(() => _busy = true);
     try {
+      final prevStreak = await _previousStreak();
       final r = await _repo.finishVisit(_visit!.id, _postAnswers!, rating);
       _timer?.cancel();
       if (!mounted) return;
+      // Still on the phone? Then the result is local and the queue will
+      // upload the visit when the connection returns.
+      final pending =
+          await ref.read(offlineVisitStoreProvider).find(_visit!.id) != null;
       ref.invalidate(profileProvider); // refresh the streak on Home
       ref.invalidate(dashboardProvider);
       ref.read(geofenceServiceProvider).onVisitClosed();
       ref.invalidate(activeVisitProvider);
       setState(() {
         _result = r;
+        _pendingSync = pending;
         _step = _Step.result;
       });
+      // Celebrate only when the server confirmed a higher streak.
+      if (!pending && r.streakCount > prevStreak && mounted) {
+        await showStreakPopup(context, r.streakCount);
+      }
     } catch (e) {
       debugPrint('Finish visit error: $e');
       _message('Could not save your visit. Please try again.');
@@ -235,6 +254,7 @@ class _VisitFlowScreenState extends ConsumerState<VisitFlowScreen> {
       case _Step.result:
         return VisitResultView(
           result: _result!,
+          pendingSync: _pendingSync,
           onDone: () => context.pop(),
         );
     }

@@ -112,6 +112,9 @@ One per user per visit
 activities, activity_logs
 Guided content and completion history
 steps stored as JSONB
+runs
+One row per Quick Run (GPS walk/run recorded in the app)
+path polyline as JSONB, offline queue on the phone (runs.sql)
 visit_summaries (view)
 Pre score, post score, Stress Reduction Score
 Respects RLS
@@ -136,7 +139,7 @@ Used by the map
 • get_user_stats() and weekly_trend() for the dashboard.
 Streak rule: a day counts when the user completes at least one visit that day, using Asia/Manila time. A visit on the day after the last counted day extends the streak; any longer gap resets it to 1. longest_streak keeps the maximum.
 4.3 Storage buckets
-• avatars: public read, users write their own file.
+• avatars and covers: public read, users write only inside their own folder (<uid>/...), created in user_profile.sql.
 • post-media: images only, size limit (for example 5 MB), signed-in read, users write their own files.
 • myday: same rules, files removed after 24 hours.
 5. Project structure
@@ -163,9 +166,10 @@ ecowell/
 │     ├─ home/                    bottom-navigation shell, home tab
 │     ├─ map/                     map screen, place details, nearby list
 │     ├─ visit/                   arrival prompt, PSS-4, active visit, result
-│     ├─ activities/              quick run, breathing, grounding
+│     ├─ activities/              breathing, grounding (guided)
+│     ├─ runs/                    Quick Run: GPS walk/run recorder + history
 │     ├─ dashboard/               streak, trends, history, PDF export
-│     ├─ community/               feed, create post, comments, MyDay
+│     ├─ community/               feed, create post, comments, MyDay, profiles
 │     ├─ ai_coach/                chat
 │     ├─ explore/                 tips and articles
 │     ├─ notifications/           inbox, preferences
@@ -211,9 +215,9 @@ F4. Visit flow and geofencing. Implements section 3.1.
 • Done when walking into and out of a real park creates and closes a visit reliably on at least two phones.
 F5. PSS-4 assessment and scoring. Four questions on a 0 to 4 scale (never to very often). Items 2 and 3 are reverse-scored, and the database computes the total. Show results with gentle, non-diagnostic wording. Done when a pre and post assessment produce the correct Stress Reduction Score.
 F6. Quiet Score. A 1 to 5 rating after each visit, one per visit, with the average shown on place cards through green_spaces_with_stats.
-F7. Activities. Quick Run (short guided session), breathing exercise (animated circle with timer, such as box breathing), and 5-4-3-2-1 grounding. Content lives in the activities table; completions go to activity_logs.
+F7. Activities and Quick Run. Quick Run (the "+" button) is a Strava-style GPS recorder: the user picks walk or run, the map draws their path while the timer, distance and pace run, and the finished run is saved offline first (SQLite) then synced to the runs table (runs.sql). It keeps recording with the screen off via the foreground service and recovers an interrupted run on the next opening. Breathing exercise (animated circle with timer, such as box breathing) and 5-4-3-2-1 grounding live in the activities table; completions go to activity_logs.
 F8. Dashboard and export. Streak, total visits, average Stress Reduction Score, weekly trend chart (fl_chart), visited places history, and a PDF summary (pdf + printing).
-F9. Community and MyDay. Paged feed, create post with compressed photos, comments, reactions, report button, 24-hour MyDay stories, Realtime updates for new posts. Show only display name and avatar for authors.
+F9. Community and MyDay. Paged feed, create post with compressed photos, comments, reactions, report button, 24-hour MyDay stories, Realtime updates for new posts. Show only display name and avatar for authors. Facebook-style profiles (/u/:id, user_profile.sql): cover photo, profile picture, joined date, follower/following counts, bio, photos grid and the person's posts; follow/unfollow for others, Edit profile sheet (name, bio, avatar + cover upload) and Log out on your own. Profiles never expose wellness scores (streak, stress, visits, runs). Profile headers and timelines are cached per user (JsonCache keys user_profile:<uid>, user_posts:<uid>), so any profile opened while online still renders offline with a "last saved info" hint.
 F10. AI wellness coach. Chat screen that calls the ai-coach Edge Function.
 • The function builds the prompt: supportive, brief, non-diagnostic, suggests nearby green spaces and activities.
 • Store messages, rate limit per user per day, keep API keys in Supabase secrets.

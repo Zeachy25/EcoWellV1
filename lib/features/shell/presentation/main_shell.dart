@@ -1,13 +1,15 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/offline/connectivity_service.dart';
 import '../../../core/services/notification_service.dart';
-import '../../activities/data/activity_repository.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/offline_strip.dart';
+import '../../dashboard/data/dashboard_repository.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../explore/presentation/explore_screen.dart';
 import '../../geofence/data/geofence_providers.dart';
@@ -18,8 +20,11 @@ import '../../home/presentation/home_screen.dart';
 import '../../map/data/map_providers.dart';
 import '../../map/domain/green_space.dart';
 import '../../map/presentation/map_screen.dart';
+import '../../runs/data/run_repository.dart';
+import '../../runs/data/run_sync_service.dart';
 import '../../visit/data/visit_providers.dart';
 import '../../visit/data/visit_repository.dart';
+import '../../visit/data/visit_sync_service.dart';
 
 /// Lets other screens (for example Home's "Start Now") switch the main tab:
 /// 0 Home, 1 Explore, 2 Map, 3 Dashboard.
@@ -58,6 +63,13 @@ class _MainShellState extends ConsumerState<MainShell>
   GreenSpace? _pendingArrival;
   GreenSpace? _pendingExit;
 
+  /// The offline notice is not permanent: it appears when the app opens
+  /// without a connection, and each time the connection drops, then hides
+  /// itself after [_offlineNoticeDuration] so it never covers the screens.
+  bool _showOfflineNotice = false;
+  Timer? _offlineNoticeTimer;
+  static const _offlineNoticeDuration = Duration(seconds: 4);
+
   static const _pages = <Widget>[
     HomeScreen(),
     ExploreScreen(),
@@ -65,10 +77,9 @@ class _MainShellState extends ConsumerState<MainShell>
     DashboardScreen(),
   ];
 
-  // Choices shown when the "+" button is tapped.
+  // Choices shown when the "+" button is tapped. Quick Run is the hero
+  // card on top of the sheet; these fill the grid below it.
   static const _actions = <_CreateAction>[
-    _CreateAction('quick', Icons.directions_run, 'Quick Run',
-        'A 2-minute reset: slow breaths, then a quick look around'),
     _CreateAction('breathing', Icons.air, 'Breathing Exercise',
         'Slow your breathing with an animated guide'),
     _CreateAction('grounding', Icons.spa, 'Grounding Exercise',
@@ -85,17 +96,39 @@ class _MainShellState extends ConsumerState<MainShell>
     shellTabIndex.value = 0;
     shellTabIndex.addListener(_onTabRequested);
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initGeofence());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initGeofence();
+      _syncQueuedData(); // anything recorded offline last time
+      if (!ref.read(isOnlineProvider)) _showOfflineNoticeForAWhile();
+    });
   }
 
   @override
   void dispose() {
+    _offlineNoticeTimer?.cancel();
     shellTabIndex.removeListener(_onTabRequested);
     WidgetsBinding.instance.removeObserver(this);
     _geoSub?.cancel();
     _tapSub?.cancel();
     ref.read(geofenceServiceProvider).stop();
     super.dispose();
+  }
+
+  // ---- offline notice ----------------------------------------------------
+
+  /// Shows the offline strip for [_offlineNoticeDuration], then removes it.
+  void _showOfflineNoticeForAWhile() {
+    _offlineNoticeTimer?.cancel();
+    if (!_showOfflineNotice) setState(() => _showOfflineNotice = true);
+    _offlineNoticeTimer = Timer(_offlineNoticeDuration, _hideOfflineNotice);
+  }
+
+  void _hideOfflineNotice() {
+    _offlineNoticeTimer?.cancel();
+    _offlineNoticeTimer = null;
+    if (_showOfflineNotice && mounted) {
+      setState(() => _showOfflineNotice = false);
+    }
   }
 
   // ---- geofence ----------------------------------------------------------
@@ -191,6 +224,8 @@ class _MainShellState extends ConsumerState<MainShell>
     _appResumed = state == AppLifecycleState.resumed;
     if (!_appResumed) return;
 
+    _syncQueuedData();
+
     final arrival = _pendingArrival;
     final exit = _pendingExit;
     _pendingArrival = null;
@@ -200,6 +235,19 @@ class _MainShellState extends ConsumerState<MainShell>
     } else if (exit != null) {
       _askToFinish(exit);
     }
+  }
+
+  /// Uploads visits and runs that were recorded offline. Runs when the
+  /// connection comes back and whenever the app is opened again.
+  Future<void> _syncQueuedData() async {
+    final syncedVisits = await ref.read(visitSyncServiceProvider).syncAll();
+    final syncedRuns = await ref.read(runSyncServiceProvider).syncAll();
+    if ((!syncedVisits && !syncedRuns) || !mounted) return;
+    ref.invalidate(profileProvider); // streak may have changed
+    ref.invalidate(dashboardProvider);
+    ref.invalidate(activeVisitProvider);
+    ref.invalidate(greenSpacesProvider); // Quiet Scores may have changed
+    ref.invalidate(runHistoryProvider);
   }
 
   /// Opens the visit flow (before questions, or where the visit left off).
@@ -213,7 +261,7 @@ class _MainShellState extends ConsumerState<MainShell>
     });
   }
 
-  /// The user tapped an EcoWell notification ("arrival:<id>" / "exit:<id>").
+  /// The user tapped an EcoWell notification ("arrival:id" / "exit:id").
   Future<void> _onNotificationTap(String payload) async {
     final parts = payload.split(':');
     if (parts.length != 2) return;
@@ -280,9 +328,6 @@ class _MainShellState extends ConsumerState<MainShell>
   /// Handles a tap on one of the "+" choices.
   void _onAction(_CreateAction a) {
     switch (a.id) {
-      case 'quick':
-        _runQuickReset();
-        break;
       case 'breathing':
         context.push('/activities/breathing');
         break;
@@ -294,45 +339,53 @@ class _MainShellState extends ConsumerState<MainShell>
     }
   }
 
-  Future<void> _runQuickReset() async {
-    try {
-      final list =
-          await ref.read(activityRepositoryProvider).fetchByType('quick_run');
-      if (!mounted) return;
-      if (list.isEmpty) {
-        _comingSoon('Quick Run');
-        return;
-      }
-      context.push('/activity', extra: list.first);
-    } catch (e) {
-      debugPrint('Quick run error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Could not load Quick Run. Please try again.'),
-      ));
-    }
-  }
-
   void _showCreateSheet() {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final a in _actions)
-              ListTile(
-                leading: Icon(a.icon),
-                title: Text(a.title),
-                subtitle: Text(a.subtitle),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Start an activity',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _QuickRunCard(
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _onAction(a);
+                  context.push('/run');
                 },
               ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 12),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 2.0,
+                children: [
+                  for (final a in _actions)
+                    _ActionCard(
+                      action: a,
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _onAction(a);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -340,12 +393,30 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   Widget build(BuildContext context) {
+    // Back online: send whatever the user did without a connection.
+    // Losing the connection later only earns a short notice, no permanent bar.
+    ref.listen<bool>(isOnlineProvider, (previous, next) {
+      if (next) {
+        _hideOfflineNotice();
+        _syncQueuedData();
+      } else {
+        _showOfflineNoticeForAWhile();
+      }
+    });
+
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
+      body: Column(
         children: [
-          for (var i = 0; i < _pages.length; i++)
-            _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+          if (_showOfflineNotice) const OfflineStrip(),
+          Expanded(
+            child: IndexedStack(
+              index: _index,
+              children: [
+                for (var i = 0; i < _pages.length; i++)
+                  _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -392,6 +463,124 @@ class _MainShellState extends ConsumerState<MainShell>
               onTap: () => _select(3),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The big "Quick Run" card at the top of the "+" sheet.
+class _QuickRunCard extends StatelessWidget {
+  const _QuickRunCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: const BoxDecoration(
+          gradient: AppColors.primaryButtonGradient,
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.directions_run,
+                      color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Quick Run',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Record your walk or run on the map. '
+                        'Works offline too.',
+                        style: TextStyle(
+                          color: AppColors.textOnDarkMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.white),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One card of the grid under the Quick Run hero card.
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({required this.action, required this.onTap});
+
+  final _CreateAction action;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Icon(action.icon, color: scheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      action.title,
+                      style: textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      action.subtitle,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

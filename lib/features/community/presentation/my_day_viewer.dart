@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/format.dart';
 import '../data/community_repository.dart';
@@ -150,6 +151,13 @@ class _StoryPageState extends State<_StoryPage>
 
   MyDayItem get _item => widget.story.items[_i];
 
+  /// Tap on the author: close the viewer, then open their profile.
+  void _openAuthorProfile() {
+    final router = GoRouter.of(context);
+    widget.onClose();
+    router.push('/u/${widget.story.userId}');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -275,22 +283,24 @@ class _StoryPageState extends State<_StoryPage>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Photo
-          Image.network(
-            CommunityRepository.photoUrl(item.photoPath),
+          // Photo (cached, so a story still shows without a connection)
+          CachedNetworkImage(
+            imageUrl: CommunityRepository.photoUrl(item.photoPath),
             key: ValueKey(item.id),
-            fit: BoxFit.cover,
-            frameBuilder: (_, child, frame, __) {
-              if (frame != null) {
-                WidgetsBinding.instance.addPostFrameCallback((_) => _onReady());
-              }
-              return child;
-            },
-            loadingBuilder: (_, child, progress) => progress == null
-                ? child
-                : const Center(
-                    child: CircularProgressIndicator(color: Colors.white)),
-            errorBuilder: (_, __, ___) {
+            imageBuilder: (context, imageProvider) => Image(
+              image: imageProvider,
+              fit: BoxFit.cover,
+              frameBuilder: (_, child, frame, _) {
+                if (frame != null) {
+                  WidgetsBinding.instance
+                      .addPostFrameCallback((_) => _onReady());
+                }
+                return child;
+              },
+            ),
+            placeholder: (_, _) => const Center(
+                child: CircularProgressIndicator(color: Colors.white)),
+            errorWidget: (_, _, _) {
               WidgetsBinding.instance.addPostFrameCallback((_) => _onReady());
               return const Center(
                 child: Icon(Icons.broken_image_outlined,
@@ -344,7 +354,7 @@ class _StoryPageState extends State<_StoryPage>
                                 borderRadius: BorderRadius.circular(2),
                                 child: AnimatedBuilder(
                                   animation: _ctrl,
-                                  builder: (_, __) => LinearProgressIndicator(
+                                  builder: (_, _) => LinearProgressIndicator(
                                     minHeight: 3,
                                     value: n < _i
                                         ? 1
@@ -364,21 +374,31 @@ class _StoryPageState extends State<_StoryPage>
                     padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
                     child: Row(
                       children: [
-                        UserAvatar(
-                            name: story.name, url: story.avatarUrl, radius: 17),
+                        GestureDetector(
+                          onTap: widget.isMine ? null : _openAuthorProfile,
+                          child: UserAvatar(
+                              name: story.name,
+                              url: story.avatarUrl,
+                              radius: 17),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Row(
                             children: [
                               Flexible(
-                                child: Text(
-                                  widget.isMine ? 'Your day' : story.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
+                                child: GestureDetector(
+                                  onTap: widget.isMine
+                                      ? null
+                                      : _openAuthorProfile,
+                                  child: Text(
+                                    widget.isMine ? 'Your day' : story.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
                               ),

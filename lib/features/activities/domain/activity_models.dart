@@ -63,7 +63,7 @@ class Activity {
 
   final String id;
 
-  /// "breathing", "grounding" or "quick_run"
+  /// "breathing" or "grounding"
   final String type;
   final String title;
   final String description;

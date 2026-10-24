@@ -20,3 +20,11 @@ const pssOptions = <String>[
   'Fairly often',
   'Very often',
 ];
+
+/// Total PSS-4 score for four answers (0-4 each). Items 2 and 3 are
+/// reverse-scored, so a lower total means less perceived stress.
+///
+/// The database computes the same number when it is available; this copy is
+/// used for visits that were recorded offline and are waiting to be synced.
+int pss4Total(List<int> answers) =>
+    answers[0] + (4 - answers[1]) + (4 - answers[2]) + answers[3];

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/format.dart';
@@ -111,15 +112,17 @@ class _SuggestedUsersSectionState extends ConsumerState<SuggestedUsersSection> {
       );
     } else {
       body = SizedBox(
-        height: Responsive.size(context, 196),
+        height: Responsive.size(context, 212),
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: users.length,
-          separatorBuilder: (_, __) => SizedBox(width: Responsive.size(context, 12)),
-          itemBuilder: (context, i) => _SuggestedCard(
-            user: users[i],
-            onFollow: () => _toggleFollow(users[i]),
-            onRemove: () => _remove(users[i]),
+          separatorBuilder: (_, _) => SizedBox(width: Responsive.size(context, 12)),
+          itemBuilder: (context, i) => IntrinsicHeight(
+            child: _SuggestedCard(
+              user: users[i],
+              onFollow: () => _toggleFollow(users[i]),
+              onRemove: () => _remove(users[i]),
+            ),
           ),
         ),
       );
@@ -153,14 +156,18 @@ class _SuggestedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: Responsive.size(context, 148),
-      padding: EdgeInsets.all(Responsive.size(context, 12)),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(Responsive.radius(context, 16)),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(Responsive.radius(context, 16)),
+      onTap: () => context.push('/u/${user.id}'),
+      child: Container(
+        width: Responsive.size(context, 148),
+        height: double.infinity,
+        padding: EdgeInsets.all(Responsive.size(context, 12)),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(Responsive.radius(context, 16)),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -170,7 +177,7 @@ class _SuggestedCard extends StatelessWidget {
             radius: Responsive.size(context, 26),
             ring: true,
           ),
-          SizedBox(height: Responsive.size(context, 8)),
+          const Spacer(),
           Text(
             user.name,
             maxLines: 1,
@@ -189,7 +196,7 @@ class _SuggestedCard extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
-          SizedBox(height: Responsive.size(context, 10)),
+          const Spacer(),
           SizedBox(
             width: double.infinity,
             height: 30,
@@ -213,7 +220,7 @@ class _SuggestedCard extends StatelessWidget {
                     child: const Text('Follow', style: TextStyle(fontSize: 12)),
                   ),
           ),
-          const SizedBox(height: 6),
+          const Spacer(),
           SizedBox(
             width: double.infinity,
             height: 30,
@@ -228,6 +235,7 @@ class _SuggestedCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

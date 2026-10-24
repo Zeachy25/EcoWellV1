@@ -5,10 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../../../core/dev_flags.dart';
 import '../../../core/utils/format.dart';
-import '../../geofence/data/geofence_providers.dart';
-import '../data/map_providers.dart';
+import '../../../features/map/data/map_providers.dart';
 import '../domain/green_space.dart';
 import 'map_helpers.dart';
 import 'place_details_sheet.dart';
@@ -60,11 +58,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         onDirections: () {
           if (mounted) context.push('/navigate', extra: s);
         },
-        onSimulateArrival: kEnableTestArrivalButton
-            ? (delay) => ref
-                .read(geofenceServiceProvider)
-                .simulateArrival(s, delay: delay)
-            : null,
       ),
     );
   }

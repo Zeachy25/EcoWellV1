@@ -56,7 +56,7 @@ class DashboardData {
   final int? bestReduction;
   final int totalMinutes;
 
-  /// Breathing / grounding / quick-reset sessions finished.
+  /// Breathing / grounding sessions finished.
   final int activitiesDone;
 
   /// Newest first (up to 30).

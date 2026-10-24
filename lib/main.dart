@@ -10,7 +10,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseKey, // publishable key (sb_publishable_...)
+    publishableKey: AppConfig.supabaseKey, // sb_publishable_...
   );
   runApp(const ProviderScope(child: EcoWellApp()));
 }
