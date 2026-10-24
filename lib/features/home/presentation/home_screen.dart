@@ -14,6 +14,7 @@ import '../../community/presentation/suggested_users_section.dart';
 import '../../map/data/map_providers.dart';
 import '../../visit/data/visit_providers.dart';
 import '../../visit/domain/visit_models.dart';
+import '../../announcements/presentation/announcement_bell.dart';
 import '../data/profile_providers.dart';
 import 'active_visit_card.dart';
 import 'hero_banner.dart';
@@ -243,15 +244,7 @@ class _Header extends StatelessWidget {
                     ),
                   ),
 
-                  // Notification bell (design only, no function yet)
-                  IconButton(
-                    tooltip: 'Notifications',
-                    icon: const Icon(
-                      Icons.notifications_none,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {},
-                  ),
+                  const AnnouncementBell(),
 
                   // Tapping the avatar opens the signed-in user's profile.
                   InkWell(
