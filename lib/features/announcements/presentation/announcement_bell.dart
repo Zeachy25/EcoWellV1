@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../data/announcement_repository.dart';
+import 'release_update_dialog.dart';
 
 class AnnouncementBell extends StatefulWidget {
   const AnnouncementBell({super.key});
@@ -161,36 +162,11 @@ class _AnnouncementBellState extends State<AnnouncementBell> {
   Future<void> _showUpdateDialog(AnnouncementItem release) async {
     if (!mounted || _promptOpen) return;
     _promptOpen = true;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(release.title),
-        content: SingleChildScrollView(child: Text(release.message)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Later'),
-          ),
-          FilledButton(
-            onPressed: release.downloadUrl == null && release.linkUrl == null
-                ? null
-                : () {
-                    Navigator.pop(dialogContext);
-                    _openLink(
-                      release.downloadUrl ?? release.linkUrl,
-                      release.downloadUrl == null
-                          ? 'Could not open the release page.'
-                          : 'Could not open the APK download.',
-                    );
-                  },
-            child: Text(
-              release.downloadUrl == null ? 'View release' : 'Download',
-            ),
-          ),
-        ],
-      ),
-    );
-    _promptOpen = false;
+    try {
+      await showReleaseUpdateDialog(context, release);
+    } finally {
+      _promptOpen = false;
+    }
   }
 
   Future<void> _openLink(String? value, String errorMessage) async {

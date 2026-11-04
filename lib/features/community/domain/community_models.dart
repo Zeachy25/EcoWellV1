@@ -243,6 +243,13 @@ class FollowedUser {
   }
 }
 
+class FollowChange {
+  const FollowChange({required this.userId, required this.following});
+
+  final String userId;
+  final bool following;
+}
+
 class SuggestedUser {
   const SuggestedUser({
     required this.id,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,8 +14,10 @@ class CommunityRepository {
   final JsonCache _cache;
 
   static const _bucket = 'post-media';
+  final _followChanges = StreamController<FollowChange>.broadcast();
 
   String get currentUserId => _client.auth.currentUser?.id ?? '';
+  Stream<FollowChange> get followChanges => _followChanges.stream;
 
   /// Public link of a photo stored in the post-media bucket.
   static String photoUrl(String path) => Supabase.instance.client.storage
@@ -419,12 +423,19 @@ class CommunityRepository {
           .eq('follower_id', currentUserId)
           .eq('following_id', userId);
     }
+    _followChanges.add(FollowChange(userId: userId, following: follow));
+  }
+
+  void dispose() {
+    _followChanges.close();
   }
 }
 
-final communityRepositoryProvider = Provider<CommunityRepository>(
-  (ref) => CommunityRepository(
+final communityRepositoryProvider = Provider<CommunityRepository>((ref) {
+  final repository = CommunityRepository(
     Supabase.instance.client,
     ref.watch(jsonCacheProvider),
-  ),
-);
+  );
+  ref.onDispose(repository.dispose);
+  return repository;
+});

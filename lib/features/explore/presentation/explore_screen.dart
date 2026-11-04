@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +11,7 @@ import '../../../core/utils/responsive.dart';
 import '../../community/data/community_repository.dart';
 import '../../community/domain/community_models.dart';
 import '../../community/presentation/comments_sheet.dart';
-import '../../community/presentation/create_post_screen.dart';
+import '../../community/presentation/create_my_day_screen.dart';
 import '../../community/presentation/my_day_row.dart';
 import '../../community/presentation/my_day_viewer.dart';
 import '../../community/presentation/post_card.dart';
@@ -37,6 +39,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   int _suggestedKey = 0;
   List<MyDayStory> _stories = [];
   List<FollowedUser> _following = [];
+  int _followingRequest = 0;
+  StreamSubscription<FollowChange>? _followSubscription;
 
   CommunityRepository get _repo => ref.read(communityRepositoryProvider);
 
@@ -47,11 +51,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     _load();
     _loadStories();
     _loadFollowing();
+    _followSubscription = _repo.followChanges.listen((_) {
+      _loadFollowing();
+    });
   }
 
   @override
   void dispose() {
     _scroll.dispose();
+    _followSubscription?.cancel();
     super.dispose();
   }
 
@@ -254,13 +262,31 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   Future<void> _loadFollowing() async {
+    final request = ++_followingRequest;
     try {
       final list = await _repo.fetchFollowing();
-      if (!mounted) return;
+      if (!mounted || request != _followingRequest) return;
       setState(() => _following = list);
     } catch (e) {
       debugPrint('Following error: $e');
     }
+  }
+
+  void _applyFollowChange(SuggestedUser user) {
+    if (!mounted) return;
+    setState(() {
+      if (user.following) {
+        if (_following.any((followed) => followed.id == user.id)) return;
+        _following = [
+          ..._following,
+          FollowedUser(id: user.id, name: user.name, avatarUrl: user.avatarUrl),
+        ];
+      } else {
+        _following = _following
+            .where((followed) => followed.id != user.id)
+            .toList();
+      }
+    });
   }
 
   /// Tap on someone you follow: their My Day if they have one active,
@@ -292,7 +318,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     if (!_requireOnline()) return;
     final created = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute<bool>(
-        builder: (_) => const CreatePostScreen(myDay: true),
+        builder: (_) => const CreateMyDayScreen(),
       ),
     );
     if (created == true) {
@@ -366,7 +392,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             SizedBox(height: Responsive.size(context, 16)),
 
             // Suggested people
-            SuggestedUsersSection(key: ValueKey(_suggestedKey)),
+            SuggestedUsersSection(
+              key: ValueKey(_suggestedKey),
+              onFollowChanged: _applyFollowChange,
+            ),
             SizedBox(height: Responsive.size(context, 16)),
 
             // All / Following

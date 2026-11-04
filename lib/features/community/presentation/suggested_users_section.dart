@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,10 +19,12 @@ class SuggestedUsersSection extends ConsumerStatefulWidget {
     super.key,
     this.title = 'Suggested',
     this.onSeeAll,
+    this.onFollowChanged,
   });
 
   final String title;
   final VoidCallback? onSeeAll;
+  final ValueChanged<SuggestedUser>? onFollowChanged;
 
   @override
   ConsumerState<SuggestedUsersSection> createState() =>
@@ -31,27 +35,40 @@ class _SuggestedUsersSectionState extends ConsumerState<SuggestedUsersSection> {
   List<SuggestedUser>? _users;
   bool _loading = true;
   bool _failed = false;
+  int _loadRequest = 0;
+  StreamSubscription<FollowChange>? _followSubscription;
 
   @override
   void initState() {
     super.initState();
+    _followSubscription = ref
+        .read(communityRepositoryProvider)
+        .followChanges
+        .listen(_handleFollowChanged);
     _load();
   }
 
+  @override
+  void dispose() {
+    _followSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    final request = ++_loadRequest;
     setState(() {
       _loading = true;
       _failed = false;
     });
     try {
       final list = await ref.read(communityRepositoryProvider).fetchSuggested();
-      if (!mounted) return;
+      if (!mounted || request != _loadRequest) return;
       setState(() {
         _users = list;
         _loading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || request != _loadRequest) return;
       setState(() {
         _loading = false;
         _failed = true;
@@ -59,11 +76,27 @@ class _SuggestedUsersSectionState extends ConsumerState<SuggestedUsersSection> {
     }
   }
 
+  void _handleFollowChanged(FollowChange change) {
+    if (!mounted) return;
+    if (change.following) {
+      setState(() {
+        _users = _users?.where((user) => user.id != change.userId).toList();
+      });
+    } else {
+      _load();
+    }
+  }
+
   Future<void> _toggleFollow(SuggestedUser u) async {
     final now = !u.following;
-    _replace(u.copyWith(following: now, followers: u.followers + (now ? 1 : -1)));
+    final updated = u.copyWith(
+      following: now,
+      followers: u.followers + (now ? 1 : -1),
+    );
+    _replace(updated);
     try {
       await ref.read(communityRepositoryProvider).setFollow(u.id, now);
+      widget.onFollowChanged?.call(updated);
     } catch (_) {
       _replace(u); // put it back
       if (!mounted) return;
@@ -168,74 +201,74 @@ class _SuggestedCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(Responsive.radius(context, 16)),
           border: Border.all(color: AppColors.cardBorder),
         ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          UserAvatar(
-            name: user.name,
-            url: user.avatarUrl,
-            radius: Responsive.size(context, 26),
-            ring: true,
-          ),
-          const Spacer(),
-          Text(
-            user.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: Responsive.fontSize(context, 13),
-              color: AppColors.textPrimary,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            UserAvatar(
+              name: user.name,
+              url: user.avatarUrl,
+              radius: Responsive.size(context, 26),
+              ring: true,
             ),
-          ),
-          Text(
-            '${formatCount(user.followers)} '
-            '${user.followers == 1 ? 'Follower' : 'Followers'}',
-            style: TextStyle(
-              fontSize: Responsive.fontSize(context, 11),
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            height: 30,
-            child: user.following
-                ? OutlinedButton(
-                    onPressed: onFollow,
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      foregroundColor: AppColors.streakOrange,
-                      side: const BorderSide(color: AppColors.streakOrange),
-                    ),
-                    child: const Text('Following', style: TextStyle(fontSize: 12)),
-                  )
-                : FilledButton(
-                    onPressed: onFollow,
-                    style: FilledButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      backgroundColor: AppColors.streakOrange,
-                    ),
-                    child: const Text('Follow', style: TextStyle(fontSize: 12)),
-                  ),
-          ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            height: 30,
-            child: OutlinedButton(
-              onPressed: onRemove,
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                foregroundColor: AppColors.textSecondary,
-                side: const BorderSide(color: AppColors.cardBorder),
+            const Spacer(),
+            Text(
+              user.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: Responsive.fontSize(context, 13),
+                color: AppColors.textPrimary,
               ),
-              child: const Text('Remove', style: TextStyle(fontSize: 12)),
             ),
-          ),
-        ],
-      ),
+            Text(
+              '${formatCount(user.followers)} '
+              '${user.followers == 1 ? 'Follower' : 'Followers'}',
+              style: TextStyle(
+                fontSize: Responsive.fontSize(context, 11),
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              height: 30,
+              child: user.following
+                  ? OutlinedButton(
+                      onPressed: onFollow,
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        foregroundColor: AppColors.streakOrange,
+                        side: const BorderSide(color: AppColors.streakOrange),
+                      ),
+                      child: const Text('Following', style: TextStyle(fontSize: 12)),
+                    )
+                  : FilledButton(
+                      onPressed: onFollow,
+                      style: FilledButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        backgroundColor: AppColors.streakOrange,
+                      ),
+                      child: const Text('Follow', style: TextStyle(fontSize: 12)),
+                    ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              height: 30,
+              child: OutlinedButton(
+                onPressed: onRemove,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: AppColors.textSecondary,
+                  side: const BorderSide(color: AppColors.cardBorder),
+                ),
+                child: const Text('Remove', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -13,6 +13,7 @@ class AnnouncementItem {
     required this.source,
     this.linkUrl,
     this.downloadUrl,
+    this.downloadSizeBytes,
     this.versionTag,
     this.isUpdate = false,
   });
@@ -24,6 +25,7 @@ class AnnouncementItem {
   final String source;
   final String? linkUrl;
   final String? downloadUrl;
+  final int? downloadSizeBytes;
   final String? versionTag;
   final bool isUpdate;
 
@@ -48,10 +50,12 @@ class AnnouncementItem {
     final tag = json['tag_name'] as String? ?? '';
     final assets = json['assets'] as List<dynamic>? ?? const [];
     String? apkUrl;
+    int? apkSizeBytes;
     for (final asset in assets) {
       if (asset is Map<String, dynamic> &&
           (asset['name'] as String? ?? '').toLowerCase().endsWith('.apk')) {
         apkUrl = asset['browser_download_url'] as String?;
+        apkSizeBytes = (asset['size'] as num?)?.toInt();
         if (apkUrl != null) break;
       }
     }
@@ -69,6 +73,7 @@ class AnnouncementItem {
       source: 'GitHub Release',
       linkUrl: releaseUrl,
       downloadUrl: apkUrl,
+      downloadSizeBytes: apkSizeBytes,
       versionTag: tag,
       isUpdate: isNewerVersion(tag, currentVersion),
     );

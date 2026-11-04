@@ -34,6 +34,7 @@ void main() {
           'name': 'app-release.apk',
           'browser_download_url':
               'https://github.com/Zeachy25/EcoWellV1/releases/download/v1.2.0/app-release.apk',
+          'size': 44_826_624,
         },
       ],
     }, currentVersion: '1.0.0');
@@ -41,6 +42,7 @@ void main() {
     expect(release.isUpdate, isTrue);
     expect(release.message, 'New features');
     expect(release.downloadUrl, endsWith('/app-release.apk'));
+    expect(release.downloadSizeBytes, 44_826_624);
   });
 
   test(
