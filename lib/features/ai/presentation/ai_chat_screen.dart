@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -13,6 +15,7 @@ import '../../map/data/map_providers.dart';
 import '../data/ai_providers.dart';
 import '../domain/ai_message.dart';
 import '../domain/ai_safety.dart';
+import 'ai_assets.dart';
 
 /// Full-screen conversation with the EcoWell AI coach.
 class AiChatScreen extends ConsumerStatefulWidget {
@@ -212,7 +215,7 @@ class _ChatTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const _AiAvatar(size: 36),
+        const _AiAvatar(size: 40, shadow: true),
         const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,20 +240,53 @@ class _ChatTitle extends StatelessWidget {
 }
 
 class _AiAvatar extends StatelessWidget {
-  const _AiAvatar({this.size = 32});
+  const _AiAvatar({this.size = 32, this.shadow = false});
 
   final double size;
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    Widget image() => Image.asset(
+      AiAssets.avatar,
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: AppColors.primaryButtonGradient,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, _, _) => Icon(
+        Icons.auto_awesome,
+        color: AppColors.primaryGreen,
+        size: size * 0.6,
       ),
-      child: Icon(Icons.auto_awesome, color: Colors.white, size: size * 0.55),
+    );
+
+    if (!shadow) return image();
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.translate(
+            offset: Offset(0, size * 0.04),
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(
+                sigmaX: size * 0.06,
+                sigmaY: size * 0.06,
+              ),
+              child: ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                  AppColors.forestDark.withValues(alpha: 0.24),
+                  BlendMode.srcIn,
+                ),
+                child: image(),
+              ),
+            ),
+          ),
+          image(),
+        ],
+      ),
     );
   }
 }
@@ -343,7 +379,7 @@ class _EmptyChat extends StatelessWidget {
         24,
       ),
       children: [
-        const Center(child: _AiAvatar(size: 64)),
+        const Center(child: _AiAvatar(size: 88, shadow: true)),
         const SizedBox(height: 16),
         Text(
           'Hi, I’m here to listen.',
@@ -460,7 +496,7 @@ class _MessageBubble extends StatelessWidget {
             : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!isUser) ...[const _AiAvatar(size: 28), const SizedBox(width: 8)],
+          if (!isUser) ...[const _AiAvatar(size: 34), const SizedBox(width: 8)],
           Flexible(child: bubble),
         ],
       ),
@@ -477,7 +513,7 @@ class _TypingBubble extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          const _AiAvatar(size: 28),
+          const _AiAvatar(size: 34),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

@@ -9,6 +9,7 @@ import '../../../core/offline/connectivity_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/offline_strip.dart';
+import '../../ai/presentation/ai_assets.dart';
 import '../../ai/presentation/ai_chat_head.dart';
 import '../../dashboard/data/dashboard_repository.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
@@ -32,11 +33,18 @@ import '../../visit/data/visit_sync_service.dart';
 final ValueNotifier<int> shellTabIndex = ValueNotifier<int>(0);
 
 class _CreateAction {
-  const _CreateAction(this.id, this.icon, this.title, this.subtitle);
+  const _CreateAction(
+    this.id,
+    this.icon,
+    this.title,
+    this.subtitle, {
+    this.imageAsset,
+  });
   final String id;
   final IconData icon;
   final String title;
   final String subtitle;
+  final String? imageAsset;
 }
 
 /// The main app frame: 4 tabs + a central "+" button.
@@ -88,7 +96,8 @@ class _MainShellState extends ConsumerState<MainShell>
     _CreateAction('share', Icons.photo_camera, 'Share a Moment',
         'Post a photo to the community'),
     _CreateAction('coach', Icons.chat_bubble_outline, 'Talk to AI Coach',
-        'Get support and ideas'),
+        'Get support and ideas',
+        imageAsset: AiAssets.icon),
   ];
 
   @override
@@ -577,7 +586,20 @@ class _ActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Row(
             children: [
-              Icon(action.icon, color: scheme.primary),
+              if (action.imageAsset != null)
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: Image.asset(
+                    action.imageAsset!,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    errorBuilder: (_, _, _) =>
+                        Icon(action.icon, color: scheme.primary),
+                  ),
+                )
+              else
+                Icon(action.icon, color: scheme.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(

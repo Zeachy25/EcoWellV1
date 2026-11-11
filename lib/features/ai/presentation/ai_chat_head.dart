@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/theme/app_colors.dart';
+import 'ai_assets.dart';
 
 /// A messenger-style floating button that opens the AI chat.
 ///
@@ -21,11 +22,15 @@ class AiChatHead extends StatefulWidget {
   State<AiChatHead> createState() => _AiChatHeadState();
 }
 
-class _AiChatHeadState extends State<AiChatHead> {
+class _AiChatHeadState extends State<AiChatHead>
+    with SingleTickerProviderStateMixin {
   static const _bubbleSize = 58.0;
   static const _edge = 12.0;
   static const _prefsX = 'ai_chat_head_x';
   static const _prefsY = 'ai_chat_head_y';
+
+  late final AnimationController _idle;
+  late final Animation<double> _bounce;
 
   SharedPreferences? _prefs;
   double? _left;
@@ -51,7 +56,20 @@ class _AiChatHeadState extends State<AiChatHead> {
   @override
   void initState() {
     super.initState();
+    _idle = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _bounce = Tween<double>(begin: 1, end: 1.035).animate(
+      CurvedAnimation(parent: _idle, curve: Curves.easeInOut),
+    );
     _loadPosition();
+  }
+
+  @override
+  void dispose() {
+    _idle.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPosition() async {
@@ -132,46 +150,65 @@ class _AiChatHeadState extends State<AiChatHead> {
             onPanStart: _onPanStart,
             onPanUpdate: _onPanUpdate,
             onPanEnd: _onPanEnd,
-            child: AnimatedScale(
-              scale: _dragging ? 1.08 : 1,
-              duration: const Duration(milliseconds: 120),
-              child: Container(
-                width: _bubbleSize,
-                height: _bubbleSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: AppColors.primaryButtonGradient,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.forestDark.withValues(alpha: 0.28),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.white,
-                      size: 26,
-                    ),
-                    Positioned(
-                      right: 9,
-                      top: 9,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          color: AppColors.mintGreen,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1.5),
+            child: AnimatedBuilder(
+              animation: _bounce,
+              builder: (context, child) => Transform.scale(
+                scale: _bounce.value,
+                child: child,
+              ),
+              child: AnimatedScale(
+                scale: _dragging ? 1.08 : 1,
+                duration: const Duration(milliseconds: 120),
+                child: Container(
+                  width: _bubbleSize,
+                  height: _bubbleSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppColors.primaryButtonGradient,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.forestDark.withValues(alpha: 0.28),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ClipOval(
+                        child: Image.asset(
+                          AiAssets.icon,
+                          width: _bubbleSize,
+                          height: _bubbleSize,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 26,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        right: 9,
+                        top: 9,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: AppColors.mintGreen,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

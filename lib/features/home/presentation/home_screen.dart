@@ -42,19 +42,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _searchRevision = 0;
   bool _searchLoading = false;
 
+  final GlobalKey _headerKey = GlobalKey();
+  double? _headerHeight;
+  late final ScrollController _scrollController;
+  final ValueNotifier<double> _scrollOffset = ValueNotifier<double>(0);
+
   @override
   void initState() {
     super.initState();
     homeSearchQuery.addListener(_onSearchChanged);
     _query = homeSearchQuery.value;
     _debouncedQuery = _query.trim();
+    _scrollController = ScrollController()
+      ..addListener(() => _scrollOffset.value = _scrollController.offset);
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
     homeSearchQuery.removeListener(_onSearchChanged);
+    _scrollController.dispose();
+    _scrollOffset.dispose();
     super.dispose();
+  }
+
+  void _measureHeader() {
+    if (!mounted) return;
+    final box = _headerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final height = box.size.height;
+    if (_headerHeight == null || (height - _headerHeight!).abs() > 0.5) {
+      setState(() => _headerHeight = height);
+    }
   }
 
   void _onSearchChanged() {
@@ -135,6 +154,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref.invalidate(activeVisitProvider);
     }
 
+    // The real header height is measured after layout so the scroll area and
+    // the green background line up with the fixed bar on every screen size.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeader());
+    final headerHeight = _headerHeight ?? _estimateHeaderHeight(context);
+    final extraGreen = searching ? 0.0 : bannerH * 0.45;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: false,
@@ -146,109 +171,165 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             FocusManager.instance.primaryFocus?.unfocus();
           }
         },
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: EdgeInsets.zero,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Column(
-                    children: [
-                      _Header(
-                        name: name,
-                        onProfile: userId.isEmpty
-                            ? null
-                            : () => context.push('/u/$userId'),
-                        bottomExtra: searching ? 0 : bannerH * 0.45,
+        child: Stack(
+          children: [
+            // Green header background. It retracts toward the search bar as
+            // the user scrolls and grows back when they return to the top.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: ValueListenableBuilder<double>(
+                valueListenable: _scrollOffset,
+                builder: (context, offset, _) {
+                  final collapse = extraGreen <= 0
+                      ? 0.0
+                      : (offset / extraGreen).clamp(0.0, 1.0);
+                  return Container(
+                    height: headerHeight + extraGreen * (1 - collapse),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1B4D36), Color(0xFF143D2B)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
-                      if (!searching) SizedBox(height: bannerH * 0.55),
-                    ],
-                  ),
-                  if (!searching)
-                    Positioned(
-                      left: pad,
-                      right: pad,
-                      bottom: 0,
-                      child: const HeroBanner(),
+                      borderRadius: BorderRadius.vertical(
+                        bottom: Radius.circular(24),
+                      ),
                     ),
-                ],
+                  );
+                },
               ),
-              if (searching)
-                _searchLoading
-                    ? const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryGreen,
+            ),
+
+            // Content starts right below the fixed header, so it slides under
+            // the bar instead of painting over it.
+            Positioned(
+              top: headerHeight,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.zero,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!searching)
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: pad),
+                        child: const HeroBanner(),
+                      ),
+                    if (searching)
+                      _searchLoading
+                          ? const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primaryGreen,
+                                ),
+                              ),
+                            )
+                          : _PlacesSection(
+                              searchQuery: _debouncedQuery,
+                              searchResults: true,
+                            )
+                    else ...[
+                      SizedBox(height: Responsive.size(context, 16)),
+                      if (profileFailed) ...[
+                        Padding(
+                          padding: _pad(context),
+                          child: _OfflineBanner(onRetry: retry),
+                        ),
+                        SizedBox(height: Responsive.size(context, 16)),
+                      ],
+                      if (p != null)
+                        Padding(
+                          padding: _pad(context),
+                          child: StreakBanner(streak: streakNum),
+                        )
+                      else if (!profileFailed)
+                        Padding(
+                          padding: _pad(context),
+                          child: _LoadingBar(
+                            height: Responsive.size(context, 62),
                           ),
                         ),
-                      )
-                    : _PlacesSection(
-                        searchQuery: _debouncedQuery,
-                        searchResults: true,
-                      )
-              else ...[
-                SizedBox(height: Responsive.size(context, 16)),
-                if (profileFailed) ...[
-                  Padding(
-                    padding: _pad(context),
-                    child: _OfflineBanner(onRetry: retry),
-                  ),
-                  SizedBox(height: Responsive.size(context, 16)),
-                ],
-                if (p != null)
-                  Padding(
-                    padding: _pad(context),
-                    child: StreakBanner(streak: streakNum),
-                  )
-                else if (!profileFailed)
-                  Padding(
-                    padding: _pad(context),
-                    child: _LoadingBar(height: Responsive.size(context, 62)),
-                  ),
-                if (active != null) ...[
-                  SizedBox(height: Responsive.size(context, 16)),
-                  Padding(
-                    padding: _pad(context),
-                    child: ActiveVisitCard(
-                      placeName: active.placeName,
-                      onTap: () => _resume(context, ref, active),
-                    ),
-                  ),
-                ],
-                SizedBox(height: Responsive.size(context, 16)),
-                Padding(padding: _pad(context), child: const WeatherCard()),
-                SizedBox(height: Responsive.size(context, 22)),
-                Padding(
-                  padding: _pad(context),
-                  child: const SuggestedUsersSection(title: 'Who to Follow'),
+                      if (active != null) ...[
+                        SizedBox(height: Responsive.size(context, 16)),
+                        Padding(
+                          padding: _pad(context),
+                          child: ActiveVisitCard(
+                            placeName: active.placeName,
+                            onTap: () => _resume(context, ref, active),
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: Responsive.size(context, 16)),
+                      Padding(
+                        padding: _pad(context),
+                        child: const WeatherCard(),
+                      ),
+                      SizedBox(height: Responsive.size(context, 22)),
+                      Padding(
+                        padding: _pad(context),
+                        child: const SuggestedUsersSection(
+                          title: 'Who to Follow',
+                        ),
+                      ),
+                      SizedBox(height: Responsive.size(context, 22)),
+                      const _SectionTitle(title: 'Wellness Score by Location'),
+                      SizedBox(height: Responsive.size(context, 6)),
+                      Padding(
+                        padding: _pad(context),
+                        child: Text(
+                          'Recommended for you - explore nearby places to help '
+                          'you relax, stay active, and recharge.',
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 12),
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: Responsive.size(context, 12)),
+                      const _PlacesSection(),
+                      SizedBox(height: Responsive.size(context, 32)),
+                    ],
+                  ],
                 ),
-                SizedBox(height: Responsive.size(context, 22)),
-                const _SectionTitle(title: 'Wellness Score by Location'),
-                SizedBox(height: Responsive.size(context, 6)),
-                Padding(
-                  padding: _pad(context),
-                  child: Text(
-                    'Recommended for you - explore nearby places to help you '
-                    'relax, stay active, and recharge.',
-                    style: TextStyle(
-                      fontSize: Responsive.fontSize(context, 12),
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                SizedBox(height: Responsive.size(context, 12)),
-                const _PlacesSection(),
-                SizedBox(height: Responsive.size(context, 32)),
-              ],
-            ],
-          ),
+              ),
+            ),
+
+            // Fixed top bar + greeting + search bar.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _Header(
+                key: _headerKey,
+                name: name,
+                onProfile: userId.isEmpty
+                    ? null
+                    : () => context.push('/u/$userId'),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  static double _estimateHeaderHeight(BuildContext context) {
+    return MediaQuery.paddingOf(context).top +
+        Responsive.size(context, 10) +
+        Responsive.size(context, 38) +
+        Responsive.size(context, 10) +
+        Responsive.size(context, 20) +
+        Responsive.size(context, 12) +
+        Responsive.size(context, 40) +
+        Responsive.size(context, 14);
   }
 
   static EdgeInsets _pad(BuildContext context) => EdgeInsets.symmetric(
@@ -262,107 +343,89 @@ class _Header extends StatelessWidget {
   final String name;
   final VoidCallback? onProfile;
 
-  /// Extra green space under the search bar, where the banner overlaps.
-  final double bottomExtra;
-
-  const _Header({
-    required this.name,
-    required this.onProfile,
-    this.bottomExtra = 0,
-  });
+  const _Header({super.key, required this.name, required this.onProfile});
 
   @override
   Widget build(BuildContext context) {
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1B4D36), Color(0xFF143D2B)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          Responsive.horizontalPadding(context) + 2,
+          Responsive.size(context, 10),
+          Responsive.horizontalPadding(context) + 2,
+          Responsive.size(context, 14),
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            Responsive.horizontalPadding(context) + 2,
-            Responsive.size(context, 10),
-            Responsive.horizontalPadding(context) + 2,
-            Responsive.size(context, 14) + bottomExtra,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top bar: logo + name (left), bell + avatar (right)
-              Row(
-                children: [
-                  EcoWellLeafIcon(
-                    size: Responsive.size(context, 26),
-                    color: AppColors.mintGreen,
-                  ),
-                  SizedBox(width: Responsive.size(context, 8)),
-                  Expanded(
-                    child: Text(
-                      'EcoWell',
-                      style: TextStyle(
-                        fontSize: Responsive.fontSize(context, 22),
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'serif',
-                        color: Colors.white,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-
-                  const AnnouncementBell(),
-
-                  // Tapping the avatar opens the signed-in user's profile.
-                  InkWell(
-                    onTap: onProfile,
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      width: Responsive.size(context, 38),
-                      height: Responsive.size(context, 38),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.mintGreen,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        initial,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: Responsive.fontSize(context, 16),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: Responsive.size(context, 10)),
-
-              // Greeting (generic until the name is known)
-              Text(
-                name.isEmpty ? 'Welcome!' : 'Hello, $name!',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: Responsive.fontSize(context, 15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top bar: logo + name (left), bell + avatar (right)
+            Row(
+              children: [
+                EcoWellLeafIcon(
+                  size: Responsive.size(context, 26),
+                  color: AppColors.mintGreen,
                 ),
-              ),
-              SizedBox(height: Responsive.size(context, 12)),
+                SizedBox(width: Responsive.size(context, 8)),
+                Expanded(
+                  child: Text(
+                    'EcoWell',
+                    style: TextStyle(
+                      fontSize: Responsive.fontSize(context, 22),
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'serif',
+                      color: Colors.white,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
 
-              const HomeSearchBar(),
-              // The hero banner is not here. It sits in HomeScreen.
-            ],
-          ),
+                const AnnouncementBell(),
+
+                // Tapping the avatar opens the signed-in user's profile.
+                InkWell(
+                  onTap: onProfile,
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    width: Responsive.size(context, 38),
+                    height: Responsive.size(context, 38),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.mintGreen,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      initial,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: Responsive.fontSize(context, 16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.size(context, 10)),
+
+            // Greeting (generic until the name is known)
+            Text(
+              name.isEmpty ? 'Welcome!' : 'Hello, $name!',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: Responsive.fontSize(context, 15),
+              ),
+            ),
+            SizedBox(height: Responsive.size(context, 12)),
+
+            const HomeSearchBar(),
+            // The hero banner is not here. It sits in HomeScreen.
+          ],
         ),
       ),
     );

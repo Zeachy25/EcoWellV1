@@ -1,12 +1,13 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../shared/widgets/full_screen_image_viewer.dart';
 import '../data/community_repository.dart';
 import '../domain/community_models.dart';
+import 'post_image_collage.dart';
 import 'user_avatar.dart';
 
 enum PostMenuAction { delete, report }
@@ -14,7 +15,7 @@ enum PostMenuAction { delete, report }
 /// One post in the Explore feed, top to bottom:
 /// avatar + name (rating on the right) / date and time / location, caption, (visit chips),
 /// photo, likes + comments summary, then a Heart | Comment | Share bar.
-class PostCard extends StatefulWidget {
+class PostCard extends StatelessWidget {
   const PostCard({
     super.key,
     required this.post,
@@ -36,13 +37,6 @@ class PostCard extends StatefulWidget {
   /// Opens the author's profile when set (tap on avatar or name).
   final ValueChanged<String>? onAuthorTap;
 
-  @override
-  State<PostCard> createState() => _PostCardState();
-}
-
-class _PostCardState extends State<PostCard> {
-  int _page = 0;
-
   /// "October 19, 2024 at 4:05 PM"
   String _when(DateTime d) {
     const months = [
@@ -55,29 +49,8 @@ class _PostCardState extends State<PostCard> {
     return '${months[d.month - 1]} ${d.day}, ${d.year} at $hour:$minute $ampm';
   }
 
-  Widget _photoBox(String path) {
-    // Cached, so a saved feed still shows its photos without a connection.
-    return CachedNetworkImage(
-      imageUrl: CommunityRepository.photoUrl(path),
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      errorWidget: (_, _, _) => Container(
-        color: AppColors.cardBorder,
-        child: const Center(
-          child:
-              Icon(Icons.image_outlined, size: 48, color: AppColors.textTertiary),
-        ),
-      ),
-      placeholder: (_, _) => Container(
-        color: AppColors.cardBorder,
-        child: const Center(child: CircularProgressIndicator()),
-      ),
-    );
-  }
-
   /// Small chips: visit time and stress change (only what exists).
-  Widget _chips(FeedPost p) {
+  Widget _chips(BuildContext context, FeedPost p) {
     final chips = <Widget>[];
 
     if (p.visitMinutes != null) {
@@ -119,13 +92,31 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  void _openPhotos(
+    BuildContext context,
+    String postId,
+    List<String> photoUrls,
+    int index,
+  ) {
+    Navigator.of(context, rootNavigator: true).push(
+      FullScreenImageViewer.route(
+        imageUrls: photoUrls,
+        initialIndex: index,
+        heroTagPrefix: postId,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final p = widget.post;
+    final p = post;
     final radius = Responsive.radius(context, 18);
     final pad = Responsive.size(context, 14);
     final hasCaption = p.caption != null && p.caption!.isNotEmpty;
     final hasAddress = p.placeAddress != null && p.placeAddress!.isNotEmpty;
+    final photoUrls = [
+      for (final path in p.photoPaths) CommunityRepository.photoUrl(path),
+    ];
 
     return Container(
       margin: EdgeInsets.only(bottom: Responsive.size(context, 16)),
@@ -147,9 +138,9 @@ class _PostCardState extends State<PostCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: widget.onAuthorTap == null
+                    onTap: onAuthorTap == null
                         ? null
-                        : () => widget.onAuthorTap!(p.author.id),
+                        : () => onAuthorTap!(p.author.id),
                     child: UserAvatar(
                       name: p.author.name,
                       url: p.author.avatarUrl,
@@ -163,9 +154,9 @@ class _PostCardState extends State<PostCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         GestureDetector(
-                          onTap: widget.onAuthorTap == null
+                          onTap: onAuthorTap == null
                               ? null
-                              : () => widget.onAuthorTap!(p.author.id),
+                              : () => onAuthorTap!(p.author.id),
                           child: Text(
                             p.author.name,
                             maxLines: 1,
@@ -238,9 +229,9 @@ class _PostCardState extends State<PostCard> {
                       PopupMenuButton<PostMenuAction>(
                     tooltip: 'More',
                     padding: EdgeInsets.zero,
-                    onSelected: widget.onMenu,
+                    onSelected: onMenu,
                     itemBuilder: (_) => [
-                      if (widget.isMine)
+                      if (isMine)
                         const PopupMenuItem(
                           value: PostMenuAction.delete,
                           child: Text('Delete post'),
@@ -282,52 +273,18 @@ class _PostCardState extends State<PostCard> {
               ),
 
             // ── Visit chips (time, stress, rating) ──
-            _chips(p),
+            _chips(context, p),
 
             // ── Photo (edge to edge) ──
-            const SizedBox(height: 12),
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (p.photoPaths.isEmpty)
-                    Container(color: AppColors.cardBorder)
-                  else
-                    PageView.builder(
-                      itemCount: p.photoPaths.length,
-                      onPageChanged: (i) => setState(() => _page = i),
-                      itemBuilder: (_, i) => _photoBox(p.photoPaths[i]),
-                    ),
-                  if (p.photoPaths.length > 1)
-                    Positioned(
-                      bottom: 8,
-                      left: 0,
-                      right: 0,
-                      child: IgnorePointer(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            for (var i = 0; i < p.photoPaths.length; i++)
-                              Container(
-                                width: 7,
-                                height: 7,
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 3),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: i == _page
-                                      ? Colors.white
-                                      : Colors.white.withValues(alpha: 0.5),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+            if (photoUrls.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              PostImageCollage(
+                imageUrls: photoUrls,
+                postId: p.id,
+                onImageTap: (index) =>
+                    _openPhotos(context, p.id, photoUrls, index),
               ),
-            ),
+            ],
 
             // ── Likes (left) and comments (right) ──
             Padding(
@@ -372,7 +329,7 @@ class _PostCardState extends State<PostCard> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: widget.onComments,
+                    onTap: onComments,
                     child: Text(
                       '${formatCount(p.commentCount)} '
                       '${p.commentCount == 1 ? 'comment' : 'comments'}',
@@ -397,7 +354,7 @@ class _PostCardState extends State<PostCard> {
                     color: p.likedByMe
                         ? Colors.redAccent
                         : AppColors.textPrimary,
-                    onTap: widget.onLike,
+                    onTap: onLike,
                   ),
                   const VerticalDivider(
                       width: 1, thickness: 1, color: AppColors.cardBorder),
@@ -405,7 +362,7 @@ class _PostCardState extends State<PostCard> {
                     tooltip: 'Comments',
                     icon: Icons.chat_bubble_outline,
                     color: AppColors.textPrimary,
-                    onTap: widget.onComments,
+                    onTap: onComments,
                   ),
                   const VerticalDivider(
                       width: 1, thickness: 1, color: AppColors.cardBorder),
@@ -413,7 +370,7 @@ class _PostCardState extends State<PostCard> {
                     tooltip: 'Share',
                     icon: Icons.ios_share,
                     color: AppColors.textPrimary,
-                    onTap: widget.onShare,
+                    onTap: onShare,
                   ),
                 ],
               ),
