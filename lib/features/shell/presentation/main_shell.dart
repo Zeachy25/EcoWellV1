@@ -9,6 +9,7 @@ import '../../../core/offline/connectivity_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/offline_strip.dart';
+import '../../ai/presentation/ai_chat_head.dart';
 import '../../dashboard/data/dashboard_repository.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../explore/presentation/explore_screen.dart';
@@ -339,6 +340,9 @@ class _MainShellState extends ConsumerState<MainShell>
       case 'grounding':
         context.push('/activities/grounding');
         break;
+      case 'coach':
+        context.push('/ai');
+        break;
       default:
         _comingSoon(a.title);
     }
@@ -410,19 +414,33 @@ class _MainShellState extends ConsumerState<MainShell>
     });
 
     return Scaffold(
-      body: Column(
-        children: [
-          if (_showOfflineNotice) const OfflineStrip(),
-          Expanded(
-            child: IndexedStack(
-              index: _index,
-              children: [
-                for (var i = 0; i < _pages.length; i++)
-                  _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
-              ],
-            ),
-          ),
-        ],
+      resizeToAvoidBottomInset: false,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              Column(
+                children: [
+                  if (_showOfflineNotice) const OfflineStrip(),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _index,
+                      children: [
+                        for (var i = 0; i < _pages.length; i++)
+                          _visited.contains(i)
+                              ? _pages[i]
+                              : const SizedBox.shrink(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              AiChatHead(
+                area: Size(constraints.maxWidth, constraints.maxHeight),
+              ),
+            ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateSheet,

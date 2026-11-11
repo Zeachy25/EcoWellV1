@@ -1,7 +1,8 @@
-# EcoWell 1.0.0 (Build 4)
+# EcoWell 1.0.0 (Build 5)
 
 ## What's new
 
+- **AI wellness coach:** A draggable floating bubble on every main tab opens a full chat with an AI companion for stress, sleep, motivation, and green-space suggestions. Replies are brief by default, and breathing or grounding suggestions can launch the existing animated activities. It includes saved history, offline fallback replies, daily usage limits, and crisis hotline guidance.
 - **Explore location details:** Tap a location card to view its photo, address, category, description, Quiet Score, and recent community comments.
 - **Check in at the right place:** Starting a check-in now checks your location. If you have arrived, you can begin the assessment; otherwise, EcoWell opens walking directions and lets you start check-in when you arrive.
 - **Live weather and forecasts:** The Home weather card uses current weather data and opens a screen with hourly conditions, a 7-day forecast, and nearby green spaces.
@@ -12,3 +13,4 @@
 
 - Location access is needed to check whether you have arrived and to provide walking directions.
 - Weather, community comments, and social actions may need an internet connection to refresh or update.
+- The AI coach requires the `ai` Edge Function, the `supabase/ai.sql` schema, and a `GEMINI_API_KEY` secret. Local fallback suggestions appear when the service is unavailable. AI replies are wellness guidance, not medical care.

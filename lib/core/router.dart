@@ -8,8 +8,6 @@ import '../features/activities/domain/activity_models.dart';
 import '../features/activities/presentation/activity_list_screen.dart';
 import '../features/activities/presentation/activity_runner_screen.dart';
 import '../features/auth/presentation/complete_profile_screen.dart';
-import '../features/community/presentation/create_post_screen.dart';
-import '../features/community/presentation/user_profile_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/legal_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -18,6 +16,9 @@ import '../features/auth/presentation/reset_code_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
+import '../features/ai/presentation/ai_chat_screen.dart';
+import '../features/community/presentation/create_post_screen.dart';
+import '../features/community/presentation/user_profile_screen.dart';
 import '../features/map/domain/green_space.dart';
 import '../features/map/presentation/location_detail_screen.dart';
 import '../features/navigation/presentation/navigation_screen.dart';
@@ -119,41 +120,38 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/legal', builder: (_, _) => const LegalScreen()),
     GoRoute(
       path: '/complete-profile',
-      builder: (_, state) => CompleteProfileScreen(
-        needsBirthdate: (state.extra as bool?) ?? true,
-      ),
+      builder: (_, state) =>
+          CompleteProfileScreen(needsBirthdate: (state.extra as bool?) ?? true),
     ),
     // After login the user lands in the main app frame (Home tab first).
     GoRoute(path: '/home', builder: (_, _) => const MainShell()),
+    GoRoute(path: '/ai', builder: (_, _) => const AiChatScreen()),
     GoRoute(path: '/weather', builder: (_, _) => const WeatherForecastScreen()),
     GoRoute(
       path: '/location/:id',
       builder: (_, state) =>
           LocationDetailScreen(space: state.extra! as GreenSpace),
     ),
-    // Share a moment (new post for the Explore feed).
     GoRoute(path: '/post/new', builder: (_, _) => const CreatePostScreen()),
-    // Facebook-style profile of any user (path param = user id).
     GoRoute(
       path: '/u/:id',
       builder: (_, state) =>
           UserProfileScreen(userId: state.pathParameters['id'] ?? ''),
     ),
-    // Quick Run: the GPS walk/run recorder and its history.
     GoRoute(path: '/run', builder: (_, _) => const RecordRunScreen()),
     GoRoute(path: '/runs', builder: (_, _) => const RunHistoryScreen()),
-    // Guided activities: a list by type, and the step-by-step runner.
     GoRoute(
       path: '/activities/:type',
-      builder: (_, state) =>
-          ActivityListScreen(type: state.pathParameters['type'] ?? 'breathing'),
+      builder: (_, state) => ActivityListScreen(
+        type: state.pathParameters['type'] ?? 'breathing',
+        reportResultToCaller: state.extra == true,
+      ),
     ),
     GoRoute(
       path: '/activity',
       builder: (_, state) =>
           ActivityRunnerScreen(activity: state.extra! as Activity),
     ),
-    // In-app walking directions to a green space.
     GoRoute(
       path: '/navigate',
       builder: (_, state) => NavigationScreen(
@@ -161,7 +159,6 @@ final GoRouter appRouter = GoRouter(
         manualCheckIn: state.uri.queryParameters['manualCheckIn'] == 'true',
       ),
     ),
-    // A whole visit: before questions -> at the place -> after -> result.
     GoRoute(
       path: '/visit',
       builder: (_, state) => VisitFlowScreen(space: state.extra! as GreenSpace),

@@ -107,14 +107,19 @@ class _ActivityRunnerScreenState extends ConsumerState<ActivityRunnerScreen> {
                       color: scheme.primary,
                     ),
                     const SizedBox(height: 24),
-                    Text(_a.title,
-                        textAlign: TextAlign.center,
-                        style: textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      _a.title,
+                      textAlign: TextAlign.center,
+                      style: textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
-                    Text(_a.description,
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodyLarge),
+                    Text(
+                      _a.description,
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyLarge,
+                    ),
                     const SizedBox(height: 16),
                     Chip(label: Text(_a.durationText)),
                     const SizedBox(height: 16),
@@ -129,7 +134,9 @@ class _ActivityRunnerScreenState extends ConsumerState<ActivityRunnerScreen> {
             ),
           ),
           FilledButton(
-            onPressed: _a.steps.isEmpty ? null : () => setState(() => _index = 0),
+            onPressed: _a.steps.isEmpty
+                ? null
+                : () => setState(() => _index = 0),
             child: const Text('Start'),
           ),
         ],
@@ -151,9 +158,12 @@ class _ActivityRunnerScreenState extends ConsumerState<ActivityRunnerScreen> {
                 children: [
                   Icon(Icons.celebration, size: 72, color: scheme.primary),
                   const SizedBox(height: 24),
-                  Text('Well done',
-                      style: textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  Text(
+                    'Well done',
+                    style: textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   const Text(
                     'Take a moment to notice how you feel.',
@@ -164,7 +174,7 @@ class _ActivityRunnerScreenState extends ConsumerState<ActivityRunnerScreen> {
             ),
           ),
           FilledButton(
-            onPressed: () => context.pop(),
+            onPressed: () => context.pop(true),
             child: const Text('Done'),
           ),
         ],

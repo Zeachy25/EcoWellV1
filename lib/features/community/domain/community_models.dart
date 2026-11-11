@@ -241,6 +241,12 @@ class FollowedUser {
       avatarUrl: j['avatar_url'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'user_id': id,
+    'full_name': name,
+    'avatar_url': avatarUrl,
+  };
 }
 
 class FollowChange {

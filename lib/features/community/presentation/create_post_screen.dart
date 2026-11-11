@@ -7,7 +7,7 @@ import 'community_post_composer.dart';
 /// Creates a regular Explore feed post.
 class CreatePostScreen extends ConsumerWidget {
   const CreatePostScreen({super.key});
-
+   
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return CommunityPostComposer(

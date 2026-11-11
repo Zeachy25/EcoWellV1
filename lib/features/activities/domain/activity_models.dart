@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import '../../../core/utils/format.dart';
 
+enum ActivityRunOutcome { completed, exitedEarly }
+
 /// One part of a breathing pattern, e.g. "Breathe in" for 4 seconds.
 class BreathPhase {
   const BreathPhase({required this.label, required this.seconds, this.to});
@@ -14,10 +16,10 @@ class BreathPhase {
   final double? to;
 
   factory BreathPhase.fromJson(Map<String, dynamic> j) => BreathPhase(
-        label: (j['label'] as String?) ?? '',
-        seconds: (j['seconds'] as num?)?.toInt() ?? 4,
-        to: (j['to'] as num?)?.toDouble(),
-      );
+    label: (j['label'] as String?) ?? '',
+    seconds: (j['seconds'] as num?)?.toInt() ?? 4,
+    to: (j['to'] as num?)?.toDouble(),
+  );
 }
 
 /// One step of an activity: a breathing pattern or a text prompt.
@@ -40,15 +42,15 @@ class ActivityStep {
   bool get isBreathing => kind == 'breathe';
 
   factory ActivityStep.fromJson(Map<String, dynamic> j) => ActivityStep(
-        kind: (j['kind'] as String?) ?? 'prompt',
-        title: (j['title'] as String?) ?? '',
-        text: (j['text'] as String?) ?? '',
-        phases: [
-          for (final p in (j['phases'] as List<dynamic>? ?? const []))
-            BreathPhase.fromJson(Map<String, dynamic>.from(p as Map)),
-        ],
-        rounds: (j['rounds'] as num?)?.toInt() ?? 1,
-      );
+    kind: (j['kind'] as String?) ?? 'prompt',
+    title: (j['title'] as String?) ?? '',
+    text: (j['text'] as String?) ?? '',
+    phases: [
+      for (final p in (j['phases'] as List<dynamic>? ?? const []))
+        BreathPhase.fromJson(Map<String, dynamic>.from(p as Map)),
+    ],
+    rounds: (j['rounds'] as num?)?.toInt() ?? 1,
+  );
 }
 
 class Activity {

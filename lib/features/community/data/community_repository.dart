@@ -265,12 +265,39 @@ class CommunityRepository {
   Future<List<PlaceComment>> fetchPlaceComments(String placeId) async {
     final res = await _client
         .from('place_comments')
-        .select('id, user_id, body, created_at, author:profiles(full_name, avatar_url)')
+        .select('id, user_id, body, created_at')
         .eq('place_id', placeId)
         .order('created_at', ascending: true);
+    final rows = [
+      for (final row in (res as List<dynamic>))
+        Map<String, dynamic>.from(row as Map),
+    ];
+    if (rows.isEmpty) return const [];
+
+    final userIds = rows
+        .map((row) => row['user_id'] as String?)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final authors = <String, Map<String, dynamic>>{};
+    if (userIds.isNotEmpty) {
+      final profiles = await _client
+          .from('public_profiles')
+          .select('id, full_name, avatar_url')
+          .inFilter('id', userIds);
+      for (final profile in (profiles as List<dynamic>)) {
+        final author = Map<String, dynamic>.from(profile as Map);
+        authors[author['id'] as String] = {
+          'full_name': author['full_name'],
+          'avatar_url': author['avatar_url'],
+        };
+      }
+    }
+
     return [
-      for (final r in (res as List<dynamic>))
-        PlaceComment.fromJson(Map<String, dynamic>.from(r as Map)),
+      for (final row in rows)
+        PlaceComment.fromJson({...row, 'author': authors[row['user_id']]}),
     ];
   }
 
@@ -374,11 +401,43 @@ class CommunityRepository {
 
   /// Everyone the signed-in user follows (display name + avatar).
   Future<List<FollowedUser>> fetchFollowing() async {
-    final res = await _client.rpc('get_following_profiles');
-    return [
-      for (final r in (res as List<dynamic>))
-        FollowedUser.fromJson(Map<String, dynamic>.from(r as Map)),
-    ];
+    final userId = currentUserId;
+    if (userId.isEmpty) {
+      throw StateError('Cannot fetch followed profiles without a signed-in user.');
+    }
+
+    final cacheKey = CacheKeys.followingProfiles(userId);
+    try {
+      final res = await _client
+          .rpc('get_following_profiles')
+          .timeout(const Duration(seconds: 8));
+      final following = [
+        for (final r in (res as List<dynamic>))
+          FollowedUser.fromJson(Map<String, dynamic>.from(r as Map)),
+      ];
+      try {
+        await _cache.write(cacheKey, [
+          for (final user in following) user.toJson(),
+        ]);
+      } catch (e) {
+        debugPrint('Could not cache followed profiles: $e');
+      }
+      return following;
+    } catch (e) {
+      debugPrint('Following fetch failed, trying cache: $e');
+      try {
+        final cached = await _cache.read(cacheKey);
+        if (cached is List) {
+          return [
+            for (final r in cached)
+              FollowedUser.fromJson(Map<String, dynamic>.from(r as Map)),
+          ];
+        }
+      } catch (cacheError) {
+        debugPrint('Could not read followed profiles cache: $cacheError');
+      }
+      rethrow;
+    }
   }
 
   /// One user's posts, in the same shape as the feed (profile screen).

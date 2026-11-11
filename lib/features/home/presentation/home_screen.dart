@@ -28,8 +28,62 @@ import '../../weather/presentation/weather_card.dart';
 /// If the profile has no birthdate or no consent yet (Google sign-in, old
 /// test accounts), it sends the user to the Complete Profile screen first.
 /// Keep this check when the real Home content is built.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Timer? _searchDebounce;
+  String _query = '';
+  String _debouncedQuery = '';
+  int _searchRevision = 0;
+  bool _searchLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    homeSearchQuery.addListener(_onSearchChanged);
+    _query = homeSearchQuery.value;
+    _debouncedQuery = _query.trim();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    homeSearchQuery.removeListener(_onSearchChanged);
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = homeSearchQuery.value;
+    if (query == _query) return;
+
+    _searchDebounce?.cancel();
+    final revision = ++_searchRevision;
+    setState(() {
+      _query = query;
+      _searchLoading = query.trim().isNotEmpty;
+    });
+
+    if (query.trim().isEmpty) {
+      setState(() {
+        _debouncedQuery = '';
+        _searchLoading = false;
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted || revision != _searchRevision) return;
+      setState(() {
+        _debouncedQuery = query.trim();
+        _searchLoading = false;
+      });
+    });
+  }
 
   // --- function: unchanged ---
   Future<void> _resume(
@@ -45,7 +99,8 @@ class HomeScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     // --- function: unchanged ---
     ref.listen<AsyncValue<Map<String, dynamic>>>(profileProvider, (_, next) {
       next.whenData((p) {
@@ -72,6 +127,7 @@ class HomeScreen extends ConsumerWidget {
     final pad = Responsive.horizontalPadding(context) + 2;
     final bannerH =
         (MediaQuery.sizeOf(context).width - pad * 2) * HeroBanner.aspect;
+    final searching = _query.trim().isNotEmpty;
 
     void retry() {
       ref.invalidate(profileProvider);
@@ -81,100 +137,115 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SingleChildScrollView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Green header with the banner overlapping its bottom edge
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Column(
-                  children: [
-                    _Header(
-                      name: name,
-                      onProfile: userId.isEmpty
-                          ? null
-                          : () => context.push('/u/$userId'),
-                      bottomExtra: bannerH * 0.45, // green behind banner
+      resizeToAvoidBottomInset: false,
+      body: PopScope(
+        canPop: _query.trim().isEmpty,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _query.trim().isNotEmpty) {
+            homeSearchQuery.value = '';
+            FocusManager.instance.primaryFocus?.unfocus();
+          }
+        },
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Column(
+                    children: [
+                      _Header(
+                        name: name,
+                        onProfile: userId.isEmpty
+                            ? null
+                            : () => context.push('/u/$userId'),
+                        bottomExtra: searching ? 0 : bannerH * 0.45,
+                      ),
+                      if (!searching) SizedBox(height: bannerH * 0.55),
+                    ],
+                  ),
+                  if (!searching)
+                    Positioned(
+                      left: pad,
+                      right: pad,
+                      bottom: 0,
+                      child: const HeroBanner(),
                     ),
-                    SizedBox(height: bannerH * 0.55), // light part
-                  ],
+                ],
+              ),
+              if (searching)
+                _searchLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryGreen,
+                          ),
+                        ),
+                      )
+                    : _PlacesSection(
+                        searchQuery: _debouncedQuery,
+                        searchResults: true,
+                      )
+              else ...[
+                SizedBox(height: Responsive.size(context, 16)),
+                if (profileFailed) ...[
+                  Padding(
+                    padding: _pad(context),
+                    child: _OfflineBanner(onRetry: retry),
+                  ),
+                  SizedBox(height: Responsive.size(context, 16)),
+                ],
+                if (p != null)
+                  Padding(
+                    padding: _pad(context),
+                    child: StreakBanner(streak: streakNum),
+                  )
+                else if (!profileFailed)
+                  Padding(
+                    padding: _pad(context),
+                    child: _LoadingBar(height: Responsive.size(context, 62)),
+                  ),
+                if (active != null) ...[
+                  SizedBox(height: Responsive.size(context, 16)),
+                  Padding(
+                    padding: _pad(context),
+                    child: ActiveVisitCard(
+                      placeName: active.placeName,
+                      onTap: () => _resume(context, ref, active),
+                    ),
+                  ),
+                ],
+                SizedBox(height: Responsive.size(context, 16)),
+                Padding(padding: _pad(context), child: const WeatherCard()),
+                SizedBox(height: Responsive.size(context, 22)),
+                Padding(
+                  padding: _pad(context),
+                  child: const SuggestedUsersSection(title: 'Who to Follow'),
                 ),
-                Positioned(
-                  left: pad,
-                  right: pad,
-                  bottom: 0,
-                  child: const HeroBanner(),
+                SizedBox(height: Responsive.size(context, 22)),
+                const _SectionTitle(title: 'Wellness Score by Location'),
+                SizedBox(height: Responsive.size(context, 6)),
+                Padding(
+                  padding: _pad(context),
+                  child: Text(
+                    'Recommended for you - explore nearby places to help you '
+                    'relax, stay active, and recharge.',
+                    style: TextStyle(
+                      fontSize: Responsive.fontSize(context, 12),
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
+                SizedBox(height: Responsive.size(context, 12)),
+                const _PlacesSection(),
+                SizedBox(height: Responsive.size(context, 32)),
               ],
-            ),
-            SizedBox(height: Responsive.size(context, 16)),
-
-            // Shown when the profile could not be loaded (offline)
-            if (profileFailed) ...[
-              Padding(
-                padding: _pad(context),
-                child: _OfflineBanner(onRetry: retry),
-              ),
-              SizedBox(height: Responsive.size(context, 16)),
             ],
-
-            // Streak: placeholder while loading, real value once known
-            if (p != null)
-              Padding(
-                padding: _pad(context),
-                child: StreakBanner(streak: streakNum),
-              )
-            else if (!profileFailed)
-              Padding(
-                padding: _pad(context),
-                child: _LoadingBar(height: Responsive.size(context, 62)),
-              ),
-
-            // Visit in progress (real data, same _resume)
-            if (active != null) ...[
-              SizedBox(height: Responsive.size(context, 16)),
-              Padding(
-                padding: _pad(context),
-                child: ActiveVisitCard(
-                  placeName: active.placeName,
-                  onTap: () => _resume(context, ref, active),
-                ),
-              ),
-            ],
-
-            SizedBox(height: Responsive.size(context, 16)),
-            Padding(padding: _pad(context), child: const WeatherCard()),
-
-            SizedBox(height: Responsive.size(context, 22)),
-            Padding(
-              padding: _pad(context),
-              child: const SuggestedUsersSection(title: 'Who to Follow'),
-            ),
-
-            SizedBox(height: Responsive.size(context, 22)),
-            const _SectionTitle(title: 'Wellness Score by Location'),
-            SizedBox(height: Responsive.size(context, 6)),
-            Padding(
-              padding: _pad(context),
-              child: Text(
-                'Recommended for you - explore nearby places to help you '
-                'relax, stay active, and recharge.',
-                style: TextStyle(
-                  fontSize: Responsive.fontSize(context, 12),
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-            SizedBox(height: Responsive.size(context, 12)),
-
-            // Places from the green spaces in Supabase (filtered by search)
-            const _PlacesSection(),
-            SizedBox(height: Responsive.size(context, 32)),
-          ],
+          ),
         ),
       ),
     );
@@ -288,23 +359,7 @@ class _Header extends StatelessWidget {
               ),
               SizedBox(height: Responsive.size(context, 12)),
 
-              // Search bar (own file: home_search_bar.dart) + filter button
-              Row(
-                children: [
-                  const Expanded(child: HomeSearchBar()),
-                  SizedBox(width: Responsive.size(context, 10)),
-                  Container(
-                    width: Responsive.size(context, 40),
-                    height: Responsive.size(context, 40),
-                    decoration: BoxDecoration(
-                      color: AppColors.streakOrange,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    // Design only, no function yet
-                    child: const Icon(Icons.tune, color: Colors.white),
-                  ),
-                ],
-              ),
+              const HomeSearchBar(),
               // The hero banner is not here. It sits in HomeScreen.
             ],
           ),
@@ -378,7 +433,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: HomeScreen._pad(context),
+      padding: _HomeScreenState._pad(context),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -407,7 +462,10 @@ class _SectionTitle extends StatelessWidget {
 // ───────────────── Places (real green spaces + search) ─────────────────
 
 class _PlacesSection extends ConsumerStatefulWidget {
-  const _PlacesSection();
+  const _PlacesSection({this.searchQuery = '', this.searchResults = false});
+
+  final String searchQuery;
+  final bool searchResults;
 
   @override
   ConsumerState<_PlacesSection> createState() => _PlacesSectionState();
@@ -544,13 +602,15 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
         ),
       ),
       error: (e, _) => Padding(
-        padding: HomeScreen._pad(context),
+        padding: _HomeScreenState._pad(context),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Could not load places.',
-                style: TextStyle(color: AppColors.textSecondary),
+                widget.searchResults
+                    ? 'We couldn’t load places. Please try again.'
+                    : 'Could not load places.',
+                style: const TextStyle(color: AppColors.textSecondary),
               ),
             ),
             TextButton(
@@ -561,74 +621,72 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
         ),
       ),
       data: (spaces) {
-        return ValueListenableBuilder<String>(
-          valueListenable: homeSearchQuery,
-          builder: (context, query, _) {
-            final q = query.trim().toLowerCase();
-            final searching = q.isNotEmpty;
+        final q = widget.searchQuery.trim().toLowerCase();
+        final searching = widget.searchResults && q.isNotEmpty;
+        final filtered = spaces.where((space) {
+          if (!searching) return true;
+          return space.name.toLowerCase().contains(q) ||
+              space.categoryLabel.toLowerCase().contains(q) ||
+              (space.address?.toLowerCase().contains(q) ?? false) ||
+              (space.description?.toLowerCase().contains(q) ?? false);
+        });
+        final matches = searching
+            ? filtered.toList()
+            : filtered.take(5).toList();
 
-            final matches = searching
-                ? spaces.where((s) => s.name.toLowerCase().contains(q)).toList()
-                : spaces.take(5).toList(); // no search: first 5 places
+        if (matches.isEmpty) {
+          return Padding(
+            padding: _HomeScreenState._pad(context),
+            child: Text(
+              searching
+                  ? 'No places match your search.'
+                  : 'No green spaces yet.',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          );
+        }
 
-            if (matches.isEmpty) {
-              return Padding(
-                padding: HomeScreen._pad(context),
-                child: Text(
-                  searching
-                      ? 'No places match "$query".'
-                      : 'No green spaces yet.',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-              );
-            }
-
-            final pad = HomeScreen._pad(context);
-            return Column(
-              children: [
-                if (_socialLoadFailed)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      pad.left,
-                      0,
-                      pad.right,
-                      Responsive.size(context, 10),
-                    ),
-                    child: Text(
-                      _placeSocial.isNotEmpty
-                          ? 'Showing saved like and comment counts. Connect to update them.'
-                          : 'Location likes and comments could not load. Check your connection and Supabase setup.',
-                      style: const TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ),
-                for (final s in matches)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: pad.left,
-                      right: pad.right,
-                      bottom: Responsive.size(context, 14),
-                    ),
-                    child: _PlaceCard(
-                      name: s.name,
-                      category: s.categoryLabel,
-                      address: s.address,
-                      onTap: () =>
-                          context.push<void>('/location/${s.id}', extra: s),
-                      // Quiet Score, only when at least one person rated it.
-                      rating: s.quietRatingCount > 0
-                          ? s.quietScoreAvg?.toStringAsFixed(1)
-                          : null,
-                      imageUrl: s.photoUrl,
-                      social: _socialFor(s.id),
-                      liking: _likingPlaces.contains(s.id),
-                      onLike: () => _toggleLike(s.id),
-                      onComments: () => _openComments(s.id),
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
+        final pad = _HomeScreenState._pad(context);
+        final children = <Widget>[
+          if (_socialLoadFailed)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                pad.left,
+                0,
+                pad.right,
+                Responsive.size(context, 10),
+              ),
+              child: Text(
+                _placeSocial.isNotEmpty
+                    ? 'Showing saved like and comment counts. Connect to update them.'
+                    : 'Location likes and comments could not load. Check your connection and Supabase setup.',
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          for (final s in matches)
+            Padding(
+              padding: EdgeInsets.only(
+                left: pad.left,
+                right: pad.right,
+                bottom: Responsive.size(context, 14),
+              ),
+              child: _PlaceCard(
+                name: s.name,
+                category: s.categoryLabel,
+                address: s.address,
+                onTap: () => context.push<void>('/location/${s.id}', extra: s),
+                rating: s.quietRatingCount > 0
+                    ? s.quietScoreAvg?.toStringAsFixed(1)
+                    : null,
+                imageUrl: s.photoUrl,
+                social: _socialFor(s.id),
+                liking: _likingPlaces.contains(s.id),
+                onLike: () => _toggleLike(s.id),
+                onComments: () => _openComments(s.id),
+              ),
+            ),
+        ];
+        return Column(children: children);
       },
     );
   }

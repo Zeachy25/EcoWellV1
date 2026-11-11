@@ -15,13 +15,29 @@ class HomeSearchBar extends StatefulWidget {
 }
 
 class _HomeSearchBarState extends State<HomeSearchBar> {
-  late final TextEditingController _controller =
-      TextEditingController(text: homeSearchQuery.value);
+  late final TextEditingController _controller = TextEditingController(
+    text: homeSearchQuery.value,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    homeSearchQuery.addListener(_syncController);
+  }
 
   @override
   void dispose() {
+    homeSearchQuery.removeListener(_syncController);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _syncController() {
+    if (_controller.text == homeSearchQuery.value) return;
+    _controller.value = TextEditingValue(
+      text: homeSearchQuery.value,
+      selection: TextSelection.collapsed(offset: homeSearchQuery.value.length),
+    );
   }
 
   void _clear() {
@@ -52,15 +68,17 @@ class _HomeSearchBarState extends State<HomeSearchBar> {
             color: Colors.white70,
             fontSize: Responsive.fontSize(context, 13),
           ),
-          prefixIcon:
-              const Icon(Icons.search, color: Colors.white70, size: 20),
+          prefixIcon: const Icon(Icons.search, color: Colors.white70, size: 20),
           suffixIcon: ValueListenableBuilder<String>(
             valueListenable: homeSearchQuery,
             builder: (_, q, _) => q.isEmpty
                 ? const SizedBox.shrink()
                 : IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 18),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
                     onPressed: _clear,
                   ),
           ),

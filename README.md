@@ -17,6 +17,12 @@ arrive, reflect on how they feel, and share experiences with the community.
 - **Connect with the community:** Share posts, comment, follow users, and
   browse community content. Create 24-hour photo stories for followers and
   view stories in Explore.
+- **Talk to an AI wellness coach:** Open the floating AI bubble on any main
+  tab for supportive guidance on stress, sleep, motivation, and nearby green
+  spaces. Replies are brief by default, and suggested breathing or grounding
+  exercises open EcoWell's existing animated activity runner. The coach falls
+  back to local suggestions when offline and shows crisis hotline information
+  when needed.
 - **Stay informed:** See current weather and a seven-day forecast, plus
   in-app announcements and release updates.
 - **Use saved data offline:** Previously loaded places and selected app data
@@ -27,7 +33,8 @@ arrive, reflect on how they feel, and share experiences with the community.
 ## Tech stack
 
 - Flutter and Dart
-- Supabase for authentication and app data
+- Supabase for authentication, app data, and Edge Functions
+- Google Gemini for the AI wellness coach
 - Riverpod for state management
 - Google Maps and Geolocator for maps and location
 - OpenRouteService for walking directions
@@ -42,6 +49,7 @@ arrive, reflect on how they feel, and share experiences with the community.
   background-geofence experience
 - Supabase project, Google Maps API key, and OpenRouteService API key for
   backend, map, and routing functionality
+- A Gemini API key for the AI wellness coach
 
 ## Configure services
 
@@ -62,6 +70,12 @@ Before running against your own backend:
 5. In Supabase Authentication settings, configure the sign-in providers and
    redirect URL used by the app. The Android Google sign-in callback scheme is
    `io.supabase.ecowell://login-callback`.
+6. To enable the AI wellness coach, run `supabase/ai.sql`, set the
+   `GEMINI_API_KEY` secret (optionally `GEMINI_MODEL` and `AI_DAILY_LIMIT`),
+   then deploy the function with `supabase functions deploy ai`. Keep JWT
+   verification enabled. See
+   [docs/ai-assistant-changes.md](docs/ai-assistant-changes.md) for the full
+   setup, safety, and architecture notes.
 
 The app requests location, notification, and photo-library permissions when
 needed. Photo access is used by the Android in-app My Day gallery; Android's
@@ -120,3 +134,8 @@ The APK is generated under `build/app/outputs/flutter-apk/`.
 Feature code lives under `lib/features/`, with shared configuration,
 services, offline storage, routing, and theme code under `lib/core/`. Backend
 SQL setup scripts are in `supabase/`, and Flutter tests are in `test/`.
+
+The current data model and data flows are documented in
+[docs/architecture-diagrams.md](docs/architecture-diagrams.md). Objects without
+checked-in schema definitions are labeled there so the diagrams are not
+mistaken for a complete database migration specification.

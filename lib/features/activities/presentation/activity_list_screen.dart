@@ -3,12 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/activity_repository.dart';
+import '../domain/activity_models.dart';
 
 /// Lists the activities of one type ("breathing" or "grounding").
 class ActivityListScreen extends ConsumerWidget {
-  const ActivityListScreen({super.key, required this.type});
+  const ActivityListScreen({
+    super.key,
+    required this.type,
+    this.reportResultToCaller = false,
+  });
 
   final String type;
+  final bool reportResultToCaller;
 
   String get _title {
     switch (type) {
@@ -47,7 +53,8 @@ class ActivityListScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: () => ref.invalidate(activitiesByTypeProvider(type)),
+                    onPressed: () =>
+                        ref.invalidate(activitiesByTypeProvider(type)),
                     child: const Text('Try again'),
                   ),
                 ],
@@ -68,7 +75,19 @@ class ActivityListScreen extends ConsumerWidget {
                 margin: const EdgeInsets.only(bottom: 12),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () => context.push('/activity', extra: a),
+                  onTap: () async {
+                    final completed = await context.push<bool>(
+                      '/activity',
+                      extra: a,
+                    );
+                    if (reportResultToCaller && context.mounted) {
+                      context.pop(
+                        completed == true
+                            ? ActivityRunOutcome.completed
+                            : ActivityRunOutcome.exitedEarly,
+                      );
+                    }
+                  },
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
@@ -84,16 +103,16 @@ class ActivityListScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 a.title,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 4),
                               Text(a.description),
                               const SizedBox(height: 8),
-                              Text(a.durationText,
-                                  style: Theme.of(context).textTheme.bodySmall),
+                              Text(
+                                a.durationText,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ],
                           ),
                         ),

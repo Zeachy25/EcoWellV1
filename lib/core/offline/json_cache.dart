@@ -61,8 +61,8 @@ class JsonCache {
   }
 
   /// Removes personal snapshots (profile, dashboard, feed, weather, cached
-  /// profile pages) when the user signs out. Shared data such as green
-  /// spaces stays.
+  /// profile pages and following lists) when the user signs out. Shared data
+  /// such as green spaces stays.
   Future<void> clearPersonal() async {
     await _offline.clearCache(const [
       'profile',
@@ -71,7 +71,14 @@ class JsonCache {
       'feed_all',
       'feed_following',
     ]);
-    await _offline.clearCacheByPrefix(const ['user_profile:', 'user_posts:']);
+    await _offline.clearCacheByPrefix(
+      const [
+        'user_profile:',
+        'user_posts:',
+        'ai_chat:',
+        'following_profiles:',
+      ],
+    );
   }
 }
 
@@ -93,11 +100,17 @@ abstract final class CacheKeys {
   /// The first page of one user's posts (profile timeline, offline).
   static String userPosts(String uid) => 'user_posts:$uid';
 
+  /// People followed by the signed-in user (cached per account).
+  static String followingProfiles(String uid) => 'following_profiles:$uid';
+
   /// Cached place social counts and the signed-in user's like state.
   static String placeSocial(String uid) => 'place_social:$uid';
 
   /// Public aggregate counts shared across accounts on this device.
   static const placeSocialCounts = 'place_social_counts';
+
+  /// The signed-in user's AI coach conversation.
+  static String aiChat(String uid) => 'ai_chat:$uid';
 }
 
 final jsonCacheProvider = Provider<JsonCache>(
