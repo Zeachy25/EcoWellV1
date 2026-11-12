@@ -66,7 +66,8 @@ Before running against your own backend:
    in your Supabase project. These scripts create or update the functions,
    tables, and policies used by the app. In particular, green-space data,
    visits, user profiles, community features, place likes/comments, runs, and
-   announcements each have related SQL files.
+   announcements each have related SQL files. Run `supabase/post_shares.sql` to
+   enable post and place sharing with in-app feed reposts.
 5. In Supabase Authentication settings, configure the sign-in providers and
    redirect URL used by the app. The Android Google sign-in callback scheme is
    `io.supabase.ecowell://login-callback`.

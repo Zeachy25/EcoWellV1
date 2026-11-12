@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +14,7 @@ import '../../community/presentation/create_my_day_screen.dart';
 import '../../community/presentation/my_day_row.dart';
 import '../../community/presentation/my_day_viewer.dart';
 import '../../community/presentation/post_card.dart';
+import '../../community/presentation/share_sheet.dart';
 import '../../community/presentation/suggested_users_section.dart';
 import '../../home/data/profile_providers.dart';
 
@@ -153,20 +153,24 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   Future<void> _toggleLike(FeedPost post) async {
     if (!_requireOnline()) return;
     final liked = !post.likedByMe;
-    _replace(post.copyWith(
-      likedByMe: liked,
-      likeCount: post.likeCount + (liked ? 1 : -1),
-    ));
+    _replace(
+      post.copyWith(
+        likedByMe: liked,
+        likeCount: post.likeCount + (liked ? 1 : -1),
+      ),
+    );
     try {
       await _repo.setLike(post.id, liked);
     } catch (e) {
       debugPrint('Like error: $e');
       final current = _find(post.id);
       if (current != null) {
-        _replace(current.copyWith(
-          likedByMe: !liked,
-          likeCount: current.likeCount + (liked ? -1 : 1),
-        ));
+        _replace(
+          current.copyWith(
+            likedByMe: !liked,
+            likeCount: current.likeCount + (liked ? -1 : 1),
+          ),
+        );
       }
       _message('Could not update your like.');
     }
@@ -184,10 +188,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   Future<void> _share(FeedPost post) async {
-    final text = '${post.author.name} shared ${post.placeName} on EcoWell'
-        '${post.caption != null && post.caption!.isNotEmpty ? ': ${post.caption}' : ''}';
-    await Clipboard.setData(ClipboardData(text: text));
-    _message('Copied to your clipboard.');
+    await openShareForPost(
+      context,
+      post: post,
+      repo: _repo,
+      onShared: () {
+        _message('Shared to your feed.');
+        _load();
+      },
+    );
   }
 
   Future<void> _onMenu(FeedPost post, PostMenuAction action) async {
@@ -199,11 +208,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           content: const Text('This cannot be undone.'),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete'),
+            ),
           ],
         ),
       );
@@ -226,8 +237,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             children: [
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
-                child: Text('Why are you reporting this post?',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(
+                  'Why are you reporting this post?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               for (final r in const [
                 'Inappropriate content',
@@ -317,9 +330,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   Future<void> _createMyDay() async {
     if (!_requireOnline()) return;
     final created = await Navigator.of(context, rootNavigator: true).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => const CreateMyDayScreen(),
-      ),
+      MaterialPageRoute<bool>(builder: (_) => const CreateMyDayScreen()),
     );
     if (created == true) {
       _message('Added to your My Day.');
@@ -454,19 +465,24 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              const Icon(Icons.photo_camera_back_outlined,
-                  size: 56, color: AppColors.mintGreen),
+              const Icon(
+                Icons.photo_camera_back_outlined,
+                size: 56,
+                color: AppColors.mintGreen,
+              ),
               const SizedBox(height: 12),
               Text(
                 _followingOnly
                     ? 'Posts from people you follow will appear here. '
-                        'Follow someone from the suggestions above.'
+                          'Follow someone from the suggestions above.'
                     : 'No posts yet. Be the first to share a moment!',
                 textAlign: TextAlign.center,
               ),
               if (!_followingOnly)
                 TextButton(
-                    onPressed: _create, child: const Text('Share a moment')),
+                  onPressed: _create,
+                  child: const Text('Share a moment'),
+                ),
             ],
           ),
         ),
@@ -483,6 +499,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           onShare: () => _share(post),
           onMenu: (a) => _onMenu(post, a),
           onAuthorTap: (userId) => context.push('/u/$userId'),
+          onPlaceTap: (space) =>
+              context.push<void>('/location/${space.id}', extra: space),
         ),
       if (_loadingMore)
         const Padding(
@@ -492,6 +510,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     ];
   }
 }
+
 /// Shown at the top of Explore while offline: what is listed is the last
 /// feed that was saved on the phone.
 class _OfflineFeedNote extends StatelessWidget {
@@ -504,7 +523,9 @@ class _OfflineFeedNote extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.orangeLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.streakOrange.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: AppColors.streakOrange.withValues(alpha: 0.4),
+        ),
       ),
       child: const Row(
         children: [

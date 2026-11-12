@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -18,6 +17,7 @@ import 'comments_sheet.dart';
 import 'edit_profile_sheet.dart';
 import 'home_widgets.dart';
 import 'post_card.dart';
+import 'share_sheet.dart';
 import 'user_avatar.dart';
 
 /// A Facebook-style profile of any EcoWell user: cover photo, profile
@@ -112,20 +112,24 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
   Future<void> _toggleLike(FeedPost post) async {
     final liked = !post.likedByMe;
-    _replace(post.copyWith(
-      likedByMe: liked,
-      likeCount: post.likeCount + (liked ? 1 : -1),
-    ));
+    _replace(
+      post.copyWith(
+        likedByMe: liked,
+        likeCount: post.likeCount + (liked ? 1 : -1),
+      ),
+    );
     try {
       await _repo.setLike(post.id, liked);
     } catch (e) {
       debugPrint('Like error: $e');
       final current = _find(post.id);
       if (current != null) {
-        _replace(current.copyWith(
-          likedByMe: !liked,
-          likeCount: current.likeCount + (liked ? -1 : 1),
-        ));
+        _replace(
+          current.copyWith(
+            likedByMe: !liked,
+            likeCount: current.likeCount + (liked ? -1 : 1),
+          ),
+        );
       }
       _message('Could not update your like.');
     }
@@ -143,10 +147,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Future<void> _share(FeedPost post) async {
-    final text = '${post.author.name} shared ${post.placeName} on EcoWell'
-        '${post.caption != null && post.caption!.isNotEmpty ? ': ${post.caption}' : ''}';
-    await Clipboard.setData(ClipboardData(text: text));
-    _message('Copied to your clipboard.');
+    await openShareForPost(
+      context,
+      post: post,
+      repo: _repo,
+      onShared: () {
+        _message('Shared to your feed.');
+        _loadPosts();
+      },
+    );
   }
 
   void _onMenu(FeedPost post, PostMenuAction action) {
@@ -159,11 +168,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           content: const Text('This cannot be undone.'),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete'),
+            ),
           ],
         ),
       ).then((ok) async {
@@ -172,7 +183,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           await _repo.deletePost(post);
           if (!mounted) return;
           setState(
-              () => _posts = _posts.where((p) => p.id != post.id).toList());
+            () => _posts = _posts.where((p) => p.id != post.id).toList(),
+          );
         } catch (e) {
           debugPrint('Delete post error: $e');
           _message('Could not delete the post.');
@@ -188,8 +200,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             children: [
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
-                child: Text('Why are you reporting this post?',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(
+                  'Why are you reporting this post?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               for (final r in const [
                 'Inappropriate content',
@@ -216,10 +230,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
   Future<void> _toggleFollow(UserProfile p) async {
     final now = !p.followedByMe;
-    setState(() => _followOverride = p.copyWith(
-      followedByMe: now,
-      followerCount: p.followerCount + (now ? 1 : -1),
-    ));
+    setState(
+      () => _followOverride = p.copyWith(
+        followedByMe: now,
+        followerCount: p.followerCount + (now ? 1 : -1),
+      ),
+    );
     try {
       await _repo.setFollow(p.id, now);
       // The refreshed header becomes the source of truth again.
@@ -247,11 +263,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         content: const Text('You will need to sign in again to use EcoWell.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Log out')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log out'),
+          ),
         ],
       ),
     );
@@ -265,18 +283,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
     // Drop the optimistic follow copy once a refreshed server answer
     // arrives (kept if the refresh fails, so the button keeps its state).
-    ref.listen<AsyncValue<UserProfile?>>(
-      userProfileProvider(widget.userId),
-      (_, next) {
-        if (_followOverride == null || next is! AsyncData<UserProfile?>) {
-          return;
-        }
-        if (next.value == null) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _followOverride = null);
-        });
-      },
-    );
+    ref.listen<AsyncValue<UserProfile?>>(userProfileProvider(widget.userId), (
+      _,
+      next,
+    ) {
+      if (_followOverride == null || next is! AsyncData<UserProfile?>) {
+        return;
+      }
+      if (next.value == null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _followOverride = null);
+      });
+    });
 
     final profile = _followOverride ?? async.value;
     final myId = _repo.currentUserId;
@@ -301,11 +319,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         final name = widget.name.isNotEmpty
             ? widget.name
             : (meta['full_name'] ??
-                meta['name'] ??
-                meta['display_name'] ??
-                (user?.email?.split('@').first) ??
-                'Profile');
-        final avatar = widget.avatarUrl ?? (meta['avatar_url'] ?? meta['picture']);
+                  meta['name'] ??
+                  meta['display_name'] ??
+                  (user?.email?.split('@').first) ??
+                  'Profile');
+        final avatar =
+            widget.avatarUrl ?? (meta['avatar_url'] ?? meta['picture']);
         final pref = UserProfile(
           id: widget.userId,
           name: name ?? 'Profile',
@@ -330,7 +349,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    UserAvatar(name: pref.name, url: pref.avatarUrl, radius: 36),
+                    UserAvatar(
+                      name: pref.name,
+                      url: pref.avatarUrl,
+                      radius: 36,
+                    ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -383,7 +406,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         appBar: _appBar(title, isMe: false, profile: null),
         body: _ProfileMessage(
           icon: Icons.cloud_off,
-          text: 'Could not load this profile. Check your connection '
+          text:
+              'Could not load this profile. Check your connection '
               'and try again.',
           buttonLabel: 'Try again',
           onPressed: () => ref.invalidate(userProfileProvider(widget.userId)),
@@ -452,8 +476,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
   // ── App bar ────────────────────────────────────────────────────────────
 
-  PreferredSizeWidget _appBar(String title,
-      {required bool isMe, required UserProfile? profile}) {
+  PreferredSizeWidget _appBar(
+    String title, {
+    required bool isMe,
+    required UserProfile? profile,
+  }) {
     return AppBar(
       title: Text(title),
       centerTitle: false,
@@ -583,8 +610,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           SizedBox(height: Responsive.size(context, 6)),
           Row(
             children: [
-              const Icon(Icons.event_available_outlined,
-                  size: 15, color: AppColors.textTertiary),
+              const Icon(
+                Icons.event_available_outlined,
+                size: 15,
+                color: AppColors.textTertiary,
+              ),
               const SizedBox(width: 5),
               Text(
                 'Joined ${formatMonthYear(profile.joinedAt!)}',
@@ -651,8 +681,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.streakOrange,
                     ),
-                    icon: const Icon(Icons.person_add_alt_1_outlined,
-                        size: 18),
+                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
                     label: const Text('Follow'),
                   ),
           ),
@@ -681,8 +710,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             fit: BoxFit.cover,
             errorWidget: (_, _, _) => Container(
               color: AppColors.cardBorder,
-              child: const Icon(Icons.image_outlined,
-                  color: AppColors.textTertiary),
+              child: const Icon(
+                Icons.image_outlined,
+                color: AppColors.textTertiary,
+              ),
             ),
           ),
         ),
@@ -753,8 +784,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              const Icon(Icons.photo_camera_back_outlined,
-                  size: 56, color: AppColors.mintGreen),
+              const Icon(
+                Icons.photo_camera_back_outlined,
+                size: 56,
+                color: AppColors.mintGreen,
+              ),
               const SizedBox(height: 12),
               Text(
                 isMe
@@ -778,6 +812,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           onShare: () => _share(post),
           onMenu: (a) => _onMenu(post, a),
           onAuthorTap: _openProfile,
+          onPlaceTap: (space) =>
+              context.push<void>('/location/${space.id}', extra: space),
         ),
     ];
   }
@@ -837,8 +873,11 @@ class _RoundCameraButton extends StatelessWidget {
         child: SizedBox(
           width: size,
           height: size,
-          child: const Icon(Icons.camera_alt_outlined,
-              size: 20, color: AppColors.forestMid),
+          child: const Icon(
+            Icons.camera_alt_outlined,
+            size: 20,
+            color: AppColors.forestMid,
+          ),
         ),
       ),
     );
@@ -860,8 +899,9 @@ class _OfflineProfileNote extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.orangeLight,
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: AppColors.streakOrange.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: AppColors.streakOrange.withValues(alpha: 0.4),
+        ),
       ),
       child: const Row(
         children: [

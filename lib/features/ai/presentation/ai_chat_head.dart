@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -24,7 +25,7 @@ class AiChatHead extends StatefulWidget {
 
 class _AiChatHeadState extends State<AiChatHead>
     with SingleTickerProviderStateMixin {
-  static const _bubbleSize = 58.0;
+  static const _bubbleSize = 64.0;
   static const _edge = 12.0;
   static const _prefsX = 'ai_chat_head_x';
   static const _prefsY = 'ai_chat_head_y';
@@ -123,6 +124,21 @@ class _AiChatHeadState extends State<AiChatHead>
     _savePosition();
   }
 
+  Widget _mascot() {
+    return Image.asset(
+      AiAssets.icon,
+      width: _bubbleSize,
+      height: _bubbleSize,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, _, _) => Icon(
+        Icons.auto_awesome,
+        color: AppColors.primaryGreen,
+        size: _bubbleSize * 0.5,
+      ),
+    );
+  }
+
   void _openChat() {
     final wasDrag = _dragDistance > 8;
     _dragDistance = 0;
@@ -159,54 +175,29 @@ class _AiChatHeadState extends State<AiChatHead>
               child: AnimatedScale(
                 scale: _dragging ? 1.08 : 1,
                 duration: const Duration(milliseconds: 120),
-                child: Container(
+                child: SizedBox(
                   width: _bubbleSize,
                   height: _bubbleSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppColors.primaryButtonGradient,
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.forestDark.withValues(alpha: 0.28),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      ClipOval(
-                        child: Image.asset(
-                          AiAssets.icon,
-                          width: _bubbleSize,
-                          height: _bubbleSize,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          errorBuilder: (_, _, _) => const Icon(
-                            Icons.auto_awesome,
-                            color: Colors.white,
-                            size: 26,
+                      Transform.translate(
+                        offset: Offset(0, _bubbleSize * 0.05),
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: _bubbleSize * 0.06,
+                            sigmaY: _bubbleSize * 0.06,
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 9,
-                        top: 9,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: AppColors.mintGreen,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 1.5,
+                          child: ColorFiltered(
+                            colorFilter: ColorFilter.mode(
+                              AppColors.forestDark.withValues(alpha: 0.24),
+                              BlendMode.srcIn,
                             ),
+                            child: _mascot(),
                           ),
                         ),
                       ),
+                      _mascot(),
                     ],
                   ),
                 ),

@@ -20,9 +20,8 @@ class CommunityRepository {
   Stream<FollowChange> get followChanges => _followChanges.stream;
 
   /// Public link of a photo stored in the post-media bucket.
-  static String photoUrl(String path) => Supabase.instance.client.storage
-      .from(_bucket)
-      .getPublicUrl(path);
+  static String photoUrl(String path) =>
+      Supabase.instance.client.storage.from(_bucket).getPublicUrl(path);
 
   // ---- feed ----------------------------------------------------------------
 
@@ -34,14 +33,20 @@ class CommunityRepository {
     int limit = 20,
   }) async {
     final firstPage = before == null;
-    final cacheKey =
-        followingOnly ? CacheKeys.feedFollowing : CacheKeys.feedAll;
+    final cacheKey = followingOnly
+        ? CacheKeys.feedFollowing
+        : CacheKeys.feedAll;
     try {
-      final res = await _client.rpc('get_feed', params: {
-        'p_limit': limit,
-        'p_before': before?.toUtc().toIso8601String(),
-        'p_following_only': followingOnly,
-      }).timeout(const Duration(seconds: 8));
+      final res = await _client
+          .rpc(
+            'get_feed',
+            params: {
+              'p_limit': limit,
+              'p_before': before?.toUtc().toIso8601String(),
+              'p_following_only': followingOnly,
+            },
+          )
+          .timeout(const Duration(seconds: 8));
       if (firstPage) await _cache.write(cacheKey, res);
       return _parseFeed(res);
     } catch (e) {
@@ -54,9 +59,9 @@ class CommunityRepository {
   }
 
   List<FeedPost> _parseFeed(Object? rows) => [
-        for (final r in (rows as List<dynamic>))
-          FeedPost.fromJson(Map<String, dynamic>.from(r as Map)),
-      ];
+    for (final r in (rows as List<dynamic>))
+      FeedPost.fromJson(Map<String, dynamic>.from(r as Map)),
+  ];
 
   // ---- posting ---------------------------------------------------------------
 
@@ -76,7 +81,9 @@ class CommunityRepository {
         final isPng = photos[i].name.toLowerCase().endsWith('.png');
         final path = '$uid/${stamp}_$i.${isPng ? 'png' : 'jpg'}';
         final bytes = await photos[i].readAsBytes();
-        await _client.storage.from(_bucket).uploadBinary(
+        await _client.storage
+            .from(_bucket)
+            .uploadBinary(
               path,
               bytes,
               fileOptions: FileOptions(
@@ -85,12 +92,15 @@ class CommunityRepository {
             );
         uploaded.add(path);
       }
-      await _client.rpc('create_post', params: {
-        'p_place_id': placeId,
-        'p_caption': caption,
-        'p_photo_paths': uploaded,
-        'p_visit_id': visitId,
-      });
+      await _client.rpc(
+        'create_post',
+        params: {
+          'p_place_id': placeId,
+          'p_caption': caption,
+          'p_photo_paths': uploaded,
+          'p_visit_id': visitId,
+        },
+      );
     } catch (e) {
       if (uploaded.isNotEmpty) {
         try {
@@ -110,6 +120,26 @@ class CommunityRepository {
     }
   }
 
+  Future<void> sharePostToFeed({
+    required String postId,
+    String caption = '',
+  }) async {
+    await _client.rpc(
+      'share_post_to_feed',
+      params: {'p_post_id': postId, 'p_caption': caption.trim()},
+    );
+  }
+
+  Future<void> sharePlaceToFeed({
+    required String placeId,
+    String caption = '',
+  }) async {
+    await _client.rpc(
+      'share_place_to_feed',
+      params: {'p_place_id': placeId, 'p_caption': caption.trim()},
+    );
+  }
+
   Future<void> reportPost(String postId, String reason) async {
     await _client.from('post_reports').insert({
       'post_id': postId,
@@ -120,20 +150,24 @@ class CommunityRepository {
 
   /// The user's latest finished visit at this place, or null.
   Future<VisitStats?> latestVisitAt(String placeId) async {
-    final rows = await _client
-        .from('visit_summaries')
-        .select('visit_id, entry_time, exit_time, stress_reduction_score')
-        .eq('place_id', placeId)
-        .eq('status', 'completed')
-        .order('entry_time', ascending: false)
-        .limit(1) as List<dynamic>;
+    final rows =
+        await _client
+                .from('visit_summaries')
+                .select(
+                  'visit_id, entry_time, exit_time, stress_reduction_score',
+                )
+                .eq('place_id', placeId)
+                .eq('status', 'completed')
+                .order('entry_time', ascending: false)
+                .limit(1)
+            as List<dynamic>;
     if (rows.isEmpty) return null;
     final r = Map<String, dynamic>.from(rows.first as Map);
     final exit = r['exit_time'] as String?;
     if (exit == null) return null;
-    final minutes = DateTime.parse(exit)
-        .difference(DateTime.parse(r['entry_time'] as String))
-        .inMinutes;
+    final minutes = DateTime.parse(
+      exit,
+    ).difference(DateTime.parse(r['entry_time'] as String)).inMinutes;
     return VisitStats(
       visitId: r['visit_id'] as String,
       minutes: minutes,
@@ -145,11 +179,13 @@ class CommunityRepository {
 
   Future<void> setLike(String postId, bool like) async {
     if (like) {
-      await _client.from('post_likes').upsert(
-        {'post_id': postId, 'user_id': currentUserId},
-        onConflict: 'post_id,user_id',
-        ignoreDuplicates: true,
-      );
+      await _client
+          .from('post_likes')
+          .upsert(
+            {'post_id': postId, 'user_id': currentUserId},
+            onConflict: 'post_id,user_id',
+            ignoreDuplicates: true,
+          );
     } else {
       await _client
           .from('post_likes')
@@ -160,7 +196,10 @@ class CommunityRepository {
   }
 
   Future<List<PostComment>> fetchComments(String postId) async {
-    final res = await _client.rpc('get_comments', params: {'p_post_id': postId});
+    final res = await _client.rpc(
+      'get_comments',
+      params: {'p_post_id': postId},
+    );
     return [
       for (final r in (res as List<dynamic>))
         PostComment.fromJson(Map<String, dynamic>.from(r as Map)),
@@ -248,11 +287,13 @@ class CommunityRepository {
 
   Future<void> setPlaceLike(String placeId, bool like) async {
     if (like) {
-      await _client.from('place_likes').upsert(
-        {'place_id': placeId, 'user_id': currentUserId},
-        onConflict: 'place_id,user_id',
-        ignoreDuplicates: true,
-      );
+      await _client
+          .from('place_likes')
+          .upsert(
+            {'place_id': placeId, 'user_id': currentUserId},
+            onConflict: 'place_id,user_id',
+            ignoreDuplicates: true,
+          );
     } else {
       await _client
           .from('place_likes')
@@ -353,9 +394,12 @@ class CommunityRepository {
     int? stressReduction,
   }) async {
     final isPng = photo.name.toLowerCase().endsWith('.png');
-    final path = '$currentUserId/myday_'
+    final path =
+        '$currentUserId/myday_'
         '${DateTime.now().millisecondsSinceEpoch}.${isPng ? 'png' : 'jpg'}';
-    await _client.storage.from(_bucket).uploadBinary(
+    await _client.storage
+        .from(_bucket)
+        .uploadBinary(
           path,
           await photo.readAsBytes(),
           fileOptions: FileOptions(
@@ -381,11 +425,13 @@ class CommunityRepository {
   }
 
   Future<void> markMyDayViewed(String myDayId) async {
-    await _client.from('my_day_views').upsert(
-      {'my_day_id': myDayId, 'viewer_id': currentUserId},
-      onConflict: 'my_day_id,viewer_id',
-      ignoreDuplicates: true,
-    );
+    await _client
+        .from('my_day_views')
+        .upsert(
+          {'my_day_id': myDayId, 'viewer_id': currentUserId},
+          onConflict: 'my_day_id,viewer_id',
+          ignoreDuplicates: true,
+        );
   }
 
   Future<void> deleteMyDay(MyDayItem item) async {
@@ -403,7 +449,9 @@ class CommunityRepository {
   Future<List<FollowedUser>> fetchFollowing() async {
     final userId = currentUserId;
     if (userId.isEmpty) {
-      throw StateError('Cannot fetch followed profiles without a signed-in user.');
+      throw StateError(
+        'Cannot fetch followed profiles without a signed-in user.',
+      );
     }
 
     final cacheKey = CacheKeys.followingProfiles(userId);
@@ -460,8 +508,10 @@ class CommunityRepository {
   }
 
   Future<List<SuggestedUser>> fetchSuggested({int limit = 10}) async {
-    final res =
-        await _client.rpc('get_suggested_users', params: {'p_limit': limit});
+    final res = await _client.rpc(
+      'get_suggested_users',
+      params: {'p_limit': limit},
+    );
     return [
       for (final r in (res as List<dynamic>))
         SuggestedUser.fromJson(Map<String, dynamic>.from(r as Map)),
@@ -470,11 +520,13 @@ class CommunityRepository {
 
   Future<void> setFollow(String userId, bool follow) async {
     if (follow) {
-      await _client.from('follows').upsert(
-        {'follower_id': currentUserId, 'following_id': userId},
-        onConflict: 'follower_id,following_id',
-        ignoreDuplicates: true,
-      );
+      await _client
+          .from('follows')
+          .upsert(
+            {'follower_id': currentUserId, 'following_id': userId},
+            onConflict: 'follower_id,following_id',
+            ignoreDuplicates: true,
+          );
     } else {
       await _client
           .from('follows')

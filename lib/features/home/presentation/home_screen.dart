@@ -12,8 +12,10 @@ import '../../../shared/widgets/ecowell_logo.dart';
 import '../../community/data/community_repository.dart';
 import '../../community/domain/community_models.dart';
 import '../../community/presentation/place_comments_sheet.dart';
+import '../../community/presentation/share_sheet.dart';
 import '../../community/presentation/suggested_users_section.dart';
 import '../../map/data/map_providers.dart';
+import '../../map/domain/green_space.dart';
 import '../../visit/data/visit_providers.dart';
 import '../../visit/domain/visit_models.dart';
 import '../../announcements/presentation/announcement_bell.dart';
@@ -653,6 +655,17 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
     );
   }
 
+  Future<void> _sharePlace(GreenSpace space) async {
+    await showPlaceShareSheet(
+      context,
+      place: space,
+      onShareToFeed: (caption) async {
+        await _community.sharePlaceToFeed(placeId: space.id, caption: caption);
+        if (mounted) _showMessage('Shared to your feed.');
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final spacesAsync = ref.watch(greenSpacesProvider);
@@ -746,6 +759,7 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
                 liking: _likingPlaces.contains(s.id),
                 onLike: () => _toggleLike(s.id),
                 onComments: () => _openComments(s.id),
+                onShare: () => _sharePlace(s),
               ),
             ),
         ];
@@ -766,6 +780,7 @@ class _PlaceCard extends StatelessWidget {
   final bool liking;
   final VoidCallback onLike;
   final VoidCallback onComments;
+  final VoidCallback onShare;
   const _PlaceCard({
     required this.name,
     required this.category,
@@ -774,6 +789,7 @@ class _PlaceCard extends StatelessWidget {
     required this.liking,
     required this.onLike,
     required this.onComments,
+    required this.onShare,
     this.address,
     this.rating,
     this.imageUrl,
@@ -922,7 +938,14 @@ class _PlaceCard extends StatelessWidget {
                       Text('${social.commentCount}'),
                     ],
                   ),
-                  Icon(Icons.share_outlined, color: AppColors.forestDark),
+                  IconButton(
+                    tooltip: 'Share place',
+                    onPressed: onShare,
+                    icon: const Icon(
+                      Icons.share_outlined,
+                      color: AppColors.forestDark,
+                    ),
+                  ),
                 ],
               ),
             ),

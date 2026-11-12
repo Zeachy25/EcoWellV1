@@ -1,3 +1,5 @@
+import '../../map/domain/green_space.dart';
+
 class PostAuthor {
   const PostAuthor({required this.id, required this.name, this.avatarUrl});
 
@@ -47,6 +49,10 @@ class FeedPost {
     this.placeScore,
     this.visitMinutes,
     this.stressReduction,
+    this.sharedPostId,
+    this.sharedPlaceId,
+    this.sharedPost,
+    this.sharedPlace,
   });
 
   final String id;
@@ -69,7 +75,18 @@ class FeedPost {
   final int? visitMinutes;
   final int? stressReduction;
 
+  final String? sharedPostId;
+  final String? sharedPlaceId;
+  final FeedPost? sharedPost;
+  final GreenSpace? sharedPlace;
+
   bool get hasVisitStats => visitMinutes != null || stressReduction != null;
+
+  bool get isShare => sharedPostId != null || sharedPlaceId != null;
+
+  bool get isShareUnavailable =>
+      (sharedPostId != null && sharedPost == null) ||
+      (sharedPlaceId != null && sharedPlace == null);
 
   FeedPost copyWith({int? likeCount, int? commentCount, bool? likedByMe}) {
     return FeedPost(
@@ -88,6 +105,10 @@ class FeedPost {
       placeScore: placeScore,
       visitMinutes: visitMinutes,
       stressReduction: stressReduction,
+      sharedPostId: sharedPostId,
+      sharedPlaceId: sharedPlaceId,
+      sharedPost: sharedPost,
+      sharedPlace: sharedPlace,
     );
   }
 
@@ -96,13 +117,16 @@ class FeedPost {
       id: j['id'] as String,
       caption: j['caption'] as String?,
       createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
-      author: PostAuthor.fromJson(Map<String, dynamic>.from(j['author'] as Map)),
+      author: PostAuthor.fromJson(
+        Map<String, dynamic>.from(j['author'] as Map),
+      ),
       placeId: (j['place_id'] as String?) ?? '',
       placeName: (j['place_name'] as String?) ?? 'Green space',
       placeAddress: j['place_address'] as String?,
       placeScore: (j['place_score'] as num?)?.toDouble(),
       photoPaths: [
-        for (final p in (j['photos'] as List<dynamic>? ?? const [])) p as String,
+        for (final p in (j['photos'] as List<dynamic>? ?? const []))
+          p as String,
       ],
       likeCount: (j['like_count'] as num?)?.toInt() ?? 0,
       commentCount: (j['comment_count'] as num?)?.toInt() ?? 0,
@@ -113,6 +137,18 @@ class FeedPost {
       ],
       visitMinutes: (j['visit_minutes'] as num?)?.toInt(),
       stressReduction: (j['stress_reduction'] as num?)?.toInt(),
+      sharedPostId: j['shared_post_id'] as String?,
+      sharedPlaceId: j['shared_place_id'] as String?,
+      sharedPost: j['shared_post'] is Map
+          ? FeedPost.fromJson(
+              Map<String, dynamic>.from(j['shared_post'] as Map),
+            )
+          : null,
+      sharedPlace: j['shared_place'] is Map
+          ? GreenSpace.fromJson(
+              Map<String, dynamic>.from(j['shared_place'] as Map),
+            )
+          : null,
     );
   }
 }
@@ -207,8 +243,9 @@ class PlaceComment {
 
   factory PlaceComment.fromJson(Map<String, dynamic> j) {
     final authorRaw = j['author'];
-    final author =
-        authorRaw is Map ? Map<String, dynamic>.from(authorRaw) : null;
+    final author = authorRaw is Map
+        ? Map<String, dynamic>.from(authorRaw)
+        : null;
     final raw = ((author?['full_name'] as String?) ?? '').trim();
     return PlaceComment(
       id: j['id'] as String,
@@ -223,11 +260,7 @@ class PlaceComment {
 
 /// Someone the signed-in user follows (from get_following_profiles).
 class FollowedUser {
-  const FollowedUser({
-    required this.id,
-    required this.name,
-    this.avatarUrl,
-  });
+  const FollowedUser({required this.id, required this.name, this.avatarUrl});
 
   final String id;
   final String name;
@@ -272,12 +305,12 @@ class SuggestedUser {
   final bool following;
 
   SuggestedUser copyWith({bool? following, int? followers}) => SuggestedUser(
-        id: id,
-        name: name,
-        avatarUrl: avatarUrl,
-        followers: followers ?? this.followers,
-        following: following ?? this.following,
-      );
+    id: id,
+    name: name,
+    avatarUrl: avatarUrl,
+    followers: followers ?? this.followers,
+    following: following ?? this.following,
+  );
 
   factory SuggestedUser.fromJson(Map<String, dynamic> j) {
     final raw = ((j['name'] as String?) ?? '').trim();

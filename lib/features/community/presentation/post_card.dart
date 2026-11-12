@@ -5,9 +5,11 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../shared/widgets/full_screen_image_viewer.dart';
+import '../../map/domain/green_space.dart';
 import '../data/community_repository.dart';
 import '../domain/community_models.dart';
 import 'post_image_collage.dart';
+import 'share_preview.dart';
 import 'user_avatar.dart';
 
 enum PostMenuAction { delete, report }
@@ -25,6 +27,7 @@ class PostCard extends StatelessWidget {
     required this.onShare,
     required this.onMenu,
     this.onAuthorTap,
+    this.onPlaceTap,
   });
 
   final FeedPost post;
@@ -37,11 +40,24 @@ class PostCard extends StatelessWidget {
   /// Opens the author's profile when set (tap on avatar or name).
   final ValueChanged<String>? onAuthorTap;
 
+  /// Opens a shared place when set.
+  final ValueChanged<GreenSpace>? onPlaceTap;
+
   /// "October 19, 2024 at 4:05 PM"
   String _when(DateTime d) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
     final minute = d.minute.toString().padLeft(2, '0');
@@ -54,40 +70,52 @@ class PostCard extends StatelessWidget {
     final chips = <Widget>[];
 
     if (p.visitMinutes != null) {
-      chips.add(_Chip(
-        icon: Icons.timer_outlined,
-        text: formatDuration(p.visitMinutes! * 60.0),
-        color: AppColors.forestMid,
-      ));
+      chips.add(
+        _Chip(
+          icon: Icons.timer_outlined,
+          text: formatDuration(p.visitMinutes! * 60.0),
+          color: AppColors.forestMid,
+        ),
+      );
     }
     final r = p.stressReduction;
     if (r != null) {
       if (r > 0) {
-        chips.add(_Chip(
-          icon: Icons.trending_down_rounded,
-          text: 'Stress \u2212$r',
-          color: AppColors.forestMid,
-          filled: true,
-        ));
+        chips.add(
+          _Chip(
+            icon: Icons.trending_down_rounded,
+            text: 'Stress \u2212$r',
+            color: AppColors.forestMid,
+            filled: true,
+          ),
+        );
       } else if (r < 0) {
-        chips.add(_Chip(
-          icon: Icons.trending_up_rounded,
-          text: 'Stress +${-r}',
-          color: AppColors.streakOrange,
-        ));
+        chips.add(
+          _Chip(
+            icon: Icons.trending_up_rounded,
+            text: 'Stress +${-r}',
+            color: AppColors.streakOrange,
+          ),
+        );
       } else {
-        chips.add(const _Chip(
-          icon: Icons.remove_rounded,
-          text: 'Stress unchanged',
-          color: AppColors.textSecondary,
-        ));
+        chips.add(
+          const _Chip(
+            icon: Icons.remove_rounded,
+            text: 'Stress unchanged',
+            color: AppColors.textSecondary,
+          ),
+        );
       }
     }
 
     if (chips.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          Responsive.size(context, 14), 12, Responsive.size(context, 14), 0),
+        Responsive.size(context, 14),
+        12,
+        Responsive.size(context, 14),
+        0,
+      ),
       child: Wrap(spacing: 8, runSpacing: 8, children: chips),
     );
   }
@@ -181,8 +209,11 @@ class PostCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Row(
                           children: [
-                            const Icon(Icons.location_on,
-                                size: 14, color: AppColors.mintGreen),
+                            const Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: AppColors.mintGreen,
+                            ),
                             const SizedBox(width: 3),
                             Expanded(
                               child: Text.rich(
@@ -227,31 +258,34 @@ class PostCard extends StatelessWidget {
                         const SizedBox(height: 22),
                       const SizedBox(height: 4), // move the menu up/down here
                       PopupMenuButton<PostMenuAction>(
-                    tooltip: 'More',
-                    padding: EdgeInsets.zero,
-                    onSelected: onMenu,
-                    itemBuilder: (_) => [
-                      if (isMine)
-                        const PopupMenuItem(
-                          value: PostMenuAction.delete,
-                          child: Text('Delete post'),
-                        )
-                      else
-                        const PopupMenuItem(
-                          value: PostMenuAction.report,
-                          child: Text('Report post'),
+                        tooltip: 'More',
+                        padding: EdgeInsets.zero,
+                        onSelected: onMenu,
+                        itemBuilder: (_) => [
+                          if (isMine)
+                            const PopupMenuItem(
+                              value: PostMenuAction.delete,
+                              child: Text('Delete post'),
+                            )
+                          else
+                            const PopupMenuItem(
+                              value: PostMenuAction.report,
+                              child: Text('Report post'),
+                            ),
+                        ],
+                        child: const SizedBox(
+                          width: 28,
+                          height: 32,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Icon(
+                              Icons.more_horiz,
+                              size: 22,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ),
-                    ],
-                    child: const SizedBox(
-                      width: 28,
-                      height: 32,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Icon(Icons.more_horiz,
-                            size: 22, color: AppColors.textSecondary),
                       ),
-                    ),
-                  ),
                     ],
                   ),
                 ],
@@ -274,6 +308,28 @@ class PostCard extends StatelessWidget {
 
             // ── Visit chips (time, stress, rating) ──
             _chips(context, p),
+
+            if (p.isShare)
+              Padding(
+                padding: EdgeInsets.fromLTRB(pad, 12, pad, 0),
+                child: p.sharedPost != null
+                    ? PostSharePreview(
+                        post: p.sharedPost!,
+                        heroPrefix: '${p.id}_shared',
+                      )
+                    : p.sharedPlace != null
+                    ? PlaceSharePreview(
+                        place: p.sharedPlace!,
+                        onTap: onPlaceTap == null
+                            ? null
+                            : () => onPlaceTap!(p.sharedPlace!),
+                      )
+                    : UnavailableShareCard(
+                        message: p.sharedPlaceId != null
+                            ? 'Place unavailable'
+                            : 'Original post unavailable',
+                      ),
+              ),
 
             // ── Photo (edge to edge) ──
             if (photoUrls.isNotEmpty) ...[
@@ -319,7 +375,7 @@ class PostCard extends StatelessWidget {
                       p.likeCount == 0
                           ? 'Be the first to like this'
                           : '${formatCount(p.likeCount)} '
-                              '${p.likeCount == 1 ? 'like' : 'likes'}',
+                                '${p.likeCount == 1 ? 'like' : 'likes'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -357,7 +413,10 @@ class PostCard extends StatelessWidget {
                     onTap: onLike,
                   ),
                   const VerticalDivider(
-                      width: 1, thickness: 1, color: AppColors.cardBorder),
+                    width: 1,
+                    thickness: 1,
+                    color: AppColors.cardBorder,
+                  ),
                   _BarButton(
                     tooltip: 'Comments',
                     icon: Icons.chat_bubble_outline,
@@ -365,12 +424,19 @@ class PostCard extends StatelessWidget {
                     onTap: onComments,
                   ),
                   const VerticalDivider(
-                      width: 1, thickness: 1, color: AppColors.cardBorder),
+                    width: 1,
+                    thickness: 1,
+                    color: AppColors.cardBorder,
+                  ),
                   _BarButton(
-                    tooltip: 'Share',
+                    tooltip: p.isShareUnavailable
+                        ? 'Original unavailable'
+                        : 'Share',
                     icon: Icons.ios_share,
-                    color: AppColors.textPrimary,
-                    onTap: onShare,
+                    color: p.isShareUnavailable
+                        ? AppColors.textTertiary
+                        : AppColors.textPrimary,
+                    onTap: p.isShareUnavailable ? null : onShare,
                   ),
                 ],
               ),
@@ -393,7 +459,7 @@ class _BarButton extends StatelessWidget {
   final String tooltip;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
