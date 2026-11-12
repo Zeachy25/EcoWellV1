@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config.dart';
+import '../../../core/deep_links.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../shared/widgets/background_pattern.dart';
@@ -46,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (supabase.auth.currentSession != null) {
-      context.go('/home');
+      context.go(consumePendingDeepLink() ?? '/home');
     } else if (!seenOnboarding) {
       context.go('/onboarding');
     } else {

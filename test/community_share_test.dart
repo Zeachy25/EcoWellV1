@@ -1,3 +1,4 @@
+import 'package:ecowell/core/config.dart';
 import 'package:ecowell/features/community/domain/community_models.dart';
 import 'package:ecowell/features/community/presentation/share_text.dart';
 import 'package:ecowell/features/map/domain/green_space.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 Map<String, dynamic> _postJson({
   String id = 'p-1',
   String? caption,
+  String placeName = 'Riverside Park',
   List<String> photos = const [],
   String? sharedPostId,
   Map<String, dynamic>? sharedPost,
@@ -22,7 +24,7 @@ Map<String, dynamic> _postJson({
       'avatar_url': 'https://cdn/avatars/u-1.jpg',
     },
     'place_id': 'g-1',
-    'place_name': 'Riverside Park',
+    'place_name': placeName,
     'place_address': 'Main Street',
     'place_score': 4.5,
     'photos': photos,
@@ -127,20 +129,26 @@ void main() {
   });
 
   group('share text', () {
-    test('post text includes author, place, caption, and photo', () {
+    test('post text is the place title plus the public link', () {
       final post = FeedPost.fromJson(
         _postJson(caption: 'Morning walk', photos: ['u-1/photo.jpg']),
       );
 
-      final text = buildPostShareText(
-        post,
-        resolvePhotoUrl: (path) => 'https://cdn/$path',
-      );
+      final text = buildPostShareText(post);
 
-      expect(text, contains('Ana Cruz on EcoWell'));
-      expect(text, contains('Riverside Park'));
-      expect(text, contains('Morning walk'));
-      expect(text, contains('https://cdn/u-1/photo.jpg'));
+      expect(
+        text,
+        'Riverside Park on EcoWell 🌿\n$kShareBaseUrl/post/p-1',
+      );
+      expect(text.split('\n'), hasLength(2));
+    });
+
+    test('post text falls back when the place name is empty', () {
+      final post = FeedPost.fromJson(_postJson(placeName: ''));
+
+      final text = buildPostShareText(post);
+
+      expect(text, 'Post on EcoWell 🌿\n$kShareBaseUrl/post/p-1');
     });
 
     test('place text includes score, photo, and map link', () {

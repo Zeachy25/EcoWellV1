@@ -18,6 +18,7 @@ import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/ai/presentation/ai_chat_screen.dart';
 import '../features/community/presentation/create_post_screen.dart';
+import '../features/community/presentation/post_detail_screen.dart';
 import '../features/community/presentation/user_profile_screen.dart';
 import '../features/map/domain/green_space.dart';
 import '../features/map/presentation/location_detail_screen.dart';
@@ -30,6 +31,7 @@ import '../features/visit/presentation/visit_flow_screen.dart';
 import '../features/weather/presentation/weather_forecast_screen.dart';
 import 'auth_flags.dart';
 import 'config.dart';
+import 'deep_links.dart';
 
 /// Re-runs the router redirect whenever the login state changes.
 /// Also notices the "password recovery" event (reset link opened).
@@ -78,6 +80,10 @@ final GoRouter appRouter = GoRouter(
     final signedOutOnly = _signedOutOnlyPages.contains(loc);
 
     if (!loggedIn && !signedOutOnly) return '/login';
+    if (loggedIn) {
+      final pending = consumePendingDeepLink();
+      if (pending != null) return pending;
+    }
     if (loggedIn && signedOutOnly) return '/home';
 
     // The code screens need the email address passed in.
@@ -133,6 +139,11 @@ final GoRouter appRouter = GoRouter(
           LocationDetailScreen(space: state.extra! as GreenSpace),
     ),
     GoRoute(path: '/post/new', builder: (_, _) => const CreatePostScreen()),
+    GoRoute(
+      path: '/post/:id',
+      builder: (_, state) =>
+          PostDetailScreen(postId: state.pathParameters['id'] ?? ''),
+    ),
     GoRoute(
       path: '/u/:id',
       builder: (_, state) =>

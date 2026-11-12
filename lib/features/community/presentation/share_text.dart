@@ -1,28 +1,13 @@
+import '../../../core/config.dart';
 import '../../map/domain/green_space.dart';
-import '../data/community_repository.dart';
 import '../domain/community_models.dart';
 
-String buildPostShareText(
-  FeedPost post, {
-  String Function(String path)? resolvePhotoUrl,
-}) {
-  final caption = (post.caption ?? '').trim();
-  final address = (post.placeAddress ?? '').trim();
-  final photo = post.photoPaths.isEmpty
-      ? null
-      : (resolvePhotoUrl ?? CommunityRepository.photoUrl)(
-          post.photoPaths.first,
-        );
-
-  final lines = <String>[
-    '${post.author.name} on EcoWell',
-    '${post.placeName}${address.isEmpty ? '' : ' · $address'}',
-    if (caption.isNotEmpty) caption,
-    if (photo != null && photo.trim().isNotEmpty) 'Photo: $photo',
-    'Shared from EcoWell.',
-  ];
-
-  return lines.join('\n\n');
+String buildPostShareText(FeedPost post) {
+  final placeName = post.placeName.trim();
+  final title = placeName.isEmpty
+      ? 'Post on EcoWell 🌿'
+      : '$placeName on EcoWell 🌿';
+  return '$title\n$kShareBaseUrl/post/${post.id}';
 }
 
 String buildPlaceShareText(GreenSpace place) {

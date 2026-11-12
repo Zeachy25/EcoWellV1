@@ -63,6 +63,12 @@ class CommunityRepository {
       FeedPost.fromJson(Map<String, dynamic>.from(r as Map)),
   ];
 
+  Future<FeedPost> fetchPost(String postId) async {
+    final res = await _client.rpc('get_post', params: {'p_id': postId});
+    if (res == null) throw StateError('Post not found');
+    return FeedPost.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   // ---- posting ---------------------------------------------------------------
 
   /// Uploads the photos, then saves the post. If saving fails, the uploaded

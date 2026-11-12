@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+const kShareBaseUrl = 'https://ecowellaar.vercel.app';
+
 /// Paste your values from Supabase: Connect dialog or Settings > API Keys.
 /// The publishable key is safe inside the app (Row Level Security protects data).
 /// NEVER put the secret / service_role key here.
